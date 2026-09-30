@@ -153,3 +153,72 @@
     print-color-adjust: exact;
   }
 }
+
+/* ─── Curavilo animated ambient background ────────────────────────────────── */
+
+@keyframes curvilo-blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(var(--bx, 70px), var(--by, 50px)) scale(1.12); }
+  66%      { transform: translate(calc(var(--bx, 70px) * -0.6), calc(var(--by, 50px) * 1.4)) scale(0.94); }
+}
+
+@keyframes curvilo-float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(var(--drift-x, 12px), -22px) rotate(var(--drift-r, 4deg)); }
+}
+
+@keyframes curvilo-aurora {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.curvilo-blob-a,
+.curvilo-blob-b,
+.curvilo-blob-c {
+  animation: curvilo-blob 18s ease-in-out infinite;
+  will-change: transform;
+}
+.curvilo-blob-a { --bx: 80px;  --by: 60px;  animation-duration: 19s; }
+.curvilo-blob-b { --bx: -110px; --by: 90px; animation-duration: 23s; }
+.curvilo-blob-c { --bx: 70px;  --by: -90px; animation-duration: 21s; }
+
+.curvilo-float {
+  animation-name: curvilo-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.curvilo-aurora {
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0)    30%,
+    rgba(94, 234, 212, 0.10)  44%,
+    rgba(165, 180, 252, 0.12) 52%,
+    rgba(103, 232, 249, 0.10) 60%,
+    rgba(255, 255, 255, 0)    74%
+  );
+  background-size: 220% 220%;
+  animation: curvilo-aurora 16s ease-in-out infinite;
+}
+
+.curvilo-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.05;
+  mask-image: radial-gradient(ellipse at center, black 25%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 25%, transparent 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curvilo-blob-a,
+  .curvilo-blob-b,
+  .curvilo-blob-c,
+  .curvilo-float,
+  .curvilo-aurora {
+    animation: none;
+  }
+}

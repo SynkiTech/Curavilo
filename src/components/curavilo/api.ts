@@ -72,6 +72,27 @@ export async function apiSend<T>(method: "POST" | "PATCH" | "DELETE", path: stri
   return handle<T>(res);
 }
 
+/**
+ * Fetch the session with short retries. The dev server / preview proxy can
+ * briefly drop requests (restarts, cold compiles) — a bare fetch there used to
+ * surface as an unhelpful "Could not sign in". Retries smooth over those gaps.
+ */
+export async function fetchSessionWithRetry(attempts = 3): Promise<SessionInfo | null> {
+  let lastError: unknown = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch("/api/auth", { cache: "no-store", credentials: "same-origin" });
+      if (res.ok) return (await res.json()) as SessionInfo;
+      lastError = new ApiError(res.status, "error", `Session request failed (${res.status})`);
+    } catch (e) {
+      lastError = e;
+    }
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+  }
+  if (lastError !== null) throw lastError;
+  return null;
+}
+
 // ─── Shared view types ──────────────────────────────────────────────────────
 
 export interface Patient {

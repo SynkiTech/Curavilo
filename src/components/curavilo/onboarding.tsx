@@ -8,9 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { apiSend, ApiError } from "./api";
+import { apiSend, ApiError, fetchSessionWithRetry, type SessionInfo } from "./api";
 import { useApp } from "./store";
 import { PROFILES_META } from "./profile-meta";
+import { AnimatedBackground } from "./animated-bg";
+
+const NETWORK_PROBLEM = "Cannot reach the server right now — it may be starting up. Please wait a moment and try again.";
 
 const STEPS = ["Organization", "Facility & profile", "Branding", "Admin account"] as const;
 
@@ -83,23 +86,35 @@ export function Onboarding({ onBack }: { onBack: () => void }) {
         },
         admin: { name: adminName.trim(), email: adminEmail.trim().toLowerCase(), password: adminPassword },
       });
-      const session = await fetch("/api/auth", { cache: "no-store" }).then((r) => r.json());
+      // Retry the session read so a transient drop right after registration
+      // doesn't strand the user on the wizard with a confusing failure.
+      let session: SessionInfo | null = null;
+      try {
+        session = await fetchSessionWithRetry();
+      } catch {
+        session = null;
+      }
+      if (!session?.authenticated) {
+        setError("Facility created, but sign-in could not be completed. Please sign in with your new account.");
+        return;
+      }
       setSession(session);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Registration failed. Please try again.");
+      setError(e instanceof ApiError ? e.message : NETWORK_PROBLEM);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 px-4 py-10">
-      <div className="mx-auto max-w-2xl">
-        <Button variant="ghost" size="sm" onClick={onBack} className="mb-4">
+    <div className="relative min-h-screen overflow-hidden px-4 py-10">
+      <AnimatedBackground />
+      <div className="relative z-10 mx-auto max-w-2xl">
+        <Button variant="ghost" onClick={onBack} className="mb-4 text-white hover:bg-white/10 hover:text-white">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to sign in
         </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">Register your facility</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Register your facility</h1>
+        <p className="mt-1 text-sm text-teal-100/75">
           Curavilo adapts to your specialty — terminology, forms, catalogue and dashboards load from your service profile.
         </p>
 
@@ -108,19 +123,19 @@ export function Onboarding({ onBack }: { onBack: () => void }) {
             <li key={s} className="flex flex-1 items-center gap-2">
               <span
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                  i < step ? "bg-teal-700 text-white" : i === step ? "border-2 border-teal-700 text-teal-700" : "border border-stone-300 text-stone-400"
+                  i < step ? "bg-teal-500 text-white" : i === step ? "border-2 border-teal-300 text-teal-200" : "border border-white/30 text-white/50"
                 }`}
                 aria-current={i === step ? "step" : undefined}
               >
                 {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
               </span>
-              <span className={`hidden text-xs sm:block ${i === step ? "font-medium text-stone-900" : "text-muted-foreground"}`}>{s}</span>
-              {i < STEPS.length - 1 ? <span className="h-px flex-1 bg-border" aria-hidden /> : null}
+              <span className={`hidden text-xs sm:block ${i === step ? "font-medium text-white" : "text-white/60"}`}>{s}</span>
+              {i < STEPS.length - 1 ? <span className="h-px flex-1 bg-white/25" aria-hidden /> : null}
             </li>
           ))}
         </ol>
 
-        <Card className="mt-6">
+        <Card className="mt-6 border-white/40 bg-white/90 shadow-xl shadow-teal-950/30 backdrop-blur-md">
           <CardHeader>
             <CardTitle className="text-base">{STEPS[step]}</CardTitle>
             {step === 1 ? <CardDescription>Pick the profile that matches what your facility provides.</CardDescription> : null}

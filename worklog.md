@@ -48,3 +48,21 @@ Fixes during verification:
 Stage Summary:
 - Milestone 1 COMMITTED (feat(platform): Curavilo Milestone 1). Golden path from spec §148 is browser-verified end to end.
 - Next engineering steps: Vitest/Playwright suites (unit + cross-tenant + financial integrity), Supabase Postgres migration (RLS), workflow visual builder + timers (Phase 5), SMS/WhatsApp adapters (Phase 6), AI evaluation suite (Phase 7), lab/radiology modules (Phase 9).
+
+---
+Task ID: 2
+Agent: main (Super Z)
+Task: Fix "Could not sign in" + facility creation errors; add animated gradient background (user bug report)
+
+Work Log:
+- Diagnosed via curl + agent-browser. Sign-in API was healthy; facility registration threw raw ZodError → fail() returned generic 500 "Something went wrong". Also: user's "Could not sign in. Please try again." is the client's network-failure fallback (dev server was likely restarting when the user tried; no retry existed).
+- Fix 1 (src/lib/api.ts): fail() now maps ZodError → 400 validation_error with first-issue field path + message. Verified: bad register payload returns `organization.name: Too small…` 400 instead of 500.
+- Fix 2 (src/components/curavilo/api.ts): added fetchSessionWithRetry() — 3 attempts, 600ms/1.2s backoff, same-origin.
+- Fix 3 (landing.tsx, onboarding.tsx): login/register now use fetchSessionWithRetry, explicitly handle authenticated:false ("workspace could not be loaded / sign in with your new account"), and show a distinct "Cannot reach the server…" message for network failures instead of the misleading generic text.
+- Enhancement: new AnimatedBackground component (animated-bg.tsx) — deep teal→cyan→indigo→violet gradient base, 4 drifting blurred blobs, 16s aurora sweep, faint masked grid, 15 floating healthcare glyphs (HeartPulse, Stethoscope, Pill, Syringe, Microscope, Dna, etc.) with per-icon float duration/delay/drift, vignette for readability; prefers-reduced-motion disables all motion (globals.css keyframes: curvilo-blob/float/aurora + utilities).
+- Restyled Landing + Onboarding to dark gradient scene with glass cards (bg-white/90 backdrop-blur, white text, restyled step indicators); boot splash matches.
+- Verification: tsc (src) 0 errors, eslint clean. agent-browser E2E: sign-in eyeclinic@ → dashboard OK; full 4-step onboarding UI wizard created "Sunrise Dental Group" → auto-login → OWNER dashboard; zero console/page errors. Screenshots in download/curavilo-landing-animated.png, curavilo-onboarding.png, curavilo-new-facility-dashboard.png.
+- Cleanup: scripts/cleanup-test-orgs.ts deleted this session's test orgs/users; demo logins re-verified 200.
+
+Stage Summary:
+- Both reported flows are fixed and browser-verified; auth screens now have the requested animated cool-gradient background with floating medical icons. Next: consider dark-mode shell parity, or move on to Phase 5 workflow builder per roadmap.

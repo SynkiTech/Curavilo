@@ -38,10 +38,10 @@ export function CuraviloApp() {
 
   if (!booted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
+      <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#042f2e_0%,#083344_28%,#0c4a6e_55%,#1e1b4b_100%)]">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 animate-pulse items-center justify-center rounded-xl bg-teal-700 text-white text-lg font-bold">C</div>
-          <p className="text-sm text-muted-foreground" role="status">Loading Curavilo…</p>
+          <div className="flex h-12 w-12 animate-pulse items-center justify-center rounded-xl bg-white/15 text-lg font-bold text-white ring-1 ring-white/30">C</div>
+          <p className="text-sm text-teal-100/70" role="status">Loading Curavilo…</p>
         </div>
       </div>
     );

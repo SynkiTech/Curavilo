@@ -1,6 +1,6 @@
 // API helpers — consistent responses, typed errors, auth+permission guard (spec §71, §84, §87).
 import { NextResponse } from "next/server";
-import { ZodSchema } from "zod";
+import { ZodError, ZodSchema } from "zod";
 import { getAuth, type AuthContext } from "@/lib/auth";
 
 export class AppError extends Error {
@@ -26,6 +26,20 @@ export function ok<T>(data: T, status = 200) {
 export function fail(error: unknown) {
   if (error instanceof AppError) {
     return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
+  }
+  // Schema-level validation failures (e.g. registerSchema.parse outside parseBody)
+  // must surface as a helpful 400, never a generic 500.
+  if (error instanceof ZodError) {
+    const first = error.issues[0];
+    return NextResponse.json(
+      {
+        error: {
+          code: "validation_error",
+          message: first ? `${first.path.join(".") || "input"}: ${first.message}` : "Invalid input.",
+        },
+      },
+      { status: 400 }
+    );
   }
   console.error("[api]", error);
   return NextResponse.json(

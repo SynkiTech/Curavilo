@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiSend, ApiError } from "./api";
+import { apiSend, ApiError, fetchSessionWithRetry, type SessionInfo } from "./api";
 import { useApp } from "./store";
+import { AnimatedBackground } from "./animated-bg";
+
+const NETWORK_PROBLEM = "Cannot reach the server right now — it may be starting up. Please wait a moment and try again.";
 
 export function Landing({ onOpenOnboarding }: { onOpenOnboarding: () => void }) {
   const [email, setEmail] = useState("");
@@ -22,47 +25,59 @@ export function Landing({ onOpenOnboarding }: { onOpenOnboarding: () => void }) 
     setError(null);
     try {
       await apiSend("POST", "/api/auth", { action: "login", email, password });
-      const session = await fetch("/api/auth", { cache: "no-store" }).then((r) => r.json());
+      // Retry the session read — transient drops used to surface as a bare
+      // "Could not sign in" even though authentication itself succeeded.
+      let session: SessionInfo | null = null;
+      try {
+        session = await fetchSessionWithRetry();
+      } catch {
+        session = null;
+      }
+      if (!session?.authenticated) {
+        setError("Signed in, but your workspace could not be loaded. Please refresh the page.");
+        return;
+      }
       setSession(session);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not sign in. Please try again.");
+      setError(e instanceof ApiError ? e.message : NETWORK_PROBLEM);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center gap-10 px-4 py-12 lg:flex-row lg:items-center lg:gap-16">
+    <div className="relative min-h-screen overflow-hidden">
+      <AnimatedBackground />
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center gap-10 px-4 py-12 lg:flex-row lg:items-center lg:gap-16">
         <div className="max-w-md">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-700 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/30 backdrop-blur">
               <HeartPulse className="h-6 w-6" aria-hidden />
             </div>
-            <span className="text-2xl font-bold tracking-tight text-stone-900">Curavilo</span>
+            <span className="text-2xl font-bold tracking-tight text-white">Curavilo</span>
           </div>
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-900">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-white">
             The operating platform for your healthcare facility.
           </h1>
-          <p className="mt-3 text-stone-600">
+          <p className="mt-3 text-teal-100/80">
             Patients, appointments, queues, encounters, billing, pharmacy, documents and AI — one calm,
             permission-aware system that adapts to your specialty.
           </p>
-          <ul className="mt-6 space-y-2 text-sm text-stone-600">
+          <ul className="mt-6 space-y-2 text-sm text-teal-100/75">
             <li>· Configurable service profiles — eye clinics, dental, GP, diagnostics and more</li>
             <li>· Deterministic billing & inventory with auditable ledgers</li>
             <li>· AI answers grounded in your own authorized data — never guessed</li>
           </ul>
-          <div className="mt-8 flex items-start gap-2 rounded-lg border border-teal-200 bg-teal-50/60 p-3 text-xs text-teal-900">
+          <div className="mt-8 flex items-start gap-2 rounded-lg border border-white/20 bg-white/10 p-3 text-xs text-teal-50 backdrop-blur">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <div>
               <p className="font-medium">Demo accounts (synthetic data)</p>
-              <p className="mt-0.5">eyeclinic@curavilo.demo · gracefield@curavilo.demo — password <code className="rounded bg-teal-100 px-1">Demo1234!</code></p>
+              <p className="mt-0.5">eyeclinic@curavilo.demo · gracefield@curavilo.demo — password <code className="rounded bg-white/15 px-1">Demo1234!</code></p>
             </div>
           </div>
         </div>
 
-        <Card className="w-full max-w-sm shadow-md">
+        <Card className="w-full max-w-sm border-white/40 bg-white/90 shadow-xl shadow-teal-950/30 backdrop-blur-md">
           <CardHeader>
             <CardTitle className="text-lg">Sign in</CardTitle>
             <CardDescription>Welcome back. Enter your facility account.</CardDescription>
@@ -101,7 +116,7 @@ export function Landing({ onOpenOnboarding }: { onOpenOnboarding: () => void }) 
           </CardContent>
         </Card>
       </div>
-      <footer className="pb-8 text-center text-xs text-stone-400">
+      <footer className="relative z-10 pb-8 text-center text-xs text-white/50">
         Curavilo · Synthetic demo data only — not for production clinical use without professional review.
       </footer>
     </div>
