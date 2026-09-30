@@ -1,0 +1,575 @@
+// Curavilo — multi-tenant healthcare operating platform
+// Money: ALL amounts are integers in minor units (kobo) + currency code. No floats.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Identity & Tenancy ─────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  currency  String   @default("NGN")
+  timezone  String   @default("Africa/Lagos")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  facilities  Facility[]
+  memberships Membership[]
+  sessions    Session[]
+
+  @@index([name])
+}
+
+model Facility {
+  id                String  @id @default(cuid())
+  orgId             String
+  name              String
+  type              String  @default("CLINIC")
+  serviceProfileKey String  @default("GENERAL_PRACTICE")
+  address           String?
+  phone             String?
+  email             String?
+  // Branding (logo stored as sanitized raster data URL)
+  logoData       String?
+  brandColor     String?
+  reportFooter   String?
+  receiptFooter  String?
+  authorizedSignatory String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  staff   StaffMember[]
+  users   Session[]    @relation("SessionActiveFacility")
+
+  @@index([orgId])
+  @@index([orgId, serviceProfileKey])
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  passwordHash    String
+  isPlatformAdmin Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  memberships Membership[]
+  sessions    Session[]
+}
+
+model Membership {
+  id        String  @id @default(cuid())
+  userId    String
+  orgId     String
+  role      String // OWNER | ADMIN | RECEPTIONIST | NURSE | DOCTOR | LAB | PHARMACY | BILLING | STAFF
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  orgId            String?
+  activeFacilityId String?
+  tokenHash        String   @unique
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org        Organization? @relation(fields: [orgId], references: [id])
+  activeFacility Facility? @relation("SessionActiveFacility", fields: [activeFacilityId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── Configuration ──────────────────────────────────────────────────────────
+
+model StaffMember {
+  id            String  @id @default(cuid())
+  orgId         String
+  facilityId    String
+  userId        String?
+  name          String
+  designation   String  @default("DOCTOR") // DOCTOR | NURSE | OPTOMETRIST | RECEPTIONIST | PHARMACIST | LAB_SCIENTIST | CASHIER | ADMIN | OTHER
+  department    String?
+  active        Boolean @default(true)
+
+  facility     Facility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  encounters   Encounter[]   @relation("EncounterStaff")
+
+  @@index([orgId, facilityId])
+  @@index([facilityId, designation])
+}
+
+model ServiceItem {
+  id          String  @id @default(cuid())
+  orgId       String
+  facilityId  String?
+  code        String
+  name        String
+  category    String  @default("CONSULTATION") // CONSULTATION | EXAMINATION | PROCEDURE | LAB | IMAGING | MEDICATION | OTHER
+  priceMinor  Int
+  currency    String  @default("NGN")
+  active      Boolean @default(true)
+
+  @@unique([orgId, code])
+  @@index([orgId, category])
+
+  appointments Appointment[]
+}
+
+// ─── Patient operations ─────────────────────────────────────────────────────
+
+model Patient {
+  id             String   @id @default(cuid())
+  orgId          String
+  facilityId     String
+  mrn            String
+  firstName      String
+  lastName       String
+  phone          String
+  email          String?
+  sex            String   @default("FEMALE") // MALE | FEMALE
+  dateOfBirth    DateTime?
+  address        String?
+  nextOfKinName  String?
+  nextOfKinPhone String?
+  bloodGroup     String?
+  allergies      String?
+  consentNote    String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  appointments Appointment[]
+  queueEntries QueueEntry[]
+  encounters   Encounter[]
+  invoices     Invoice[]
+  followUps    FollowUp[]
+  sales        Sale[]
+
+  @@unique([orgId, mrn])
+  @@index([orgId, facilityId])
+  @@index([orgId, phone])
+  @@index([orgId, lastName])
+  @@index([facilityId, createdAt])
+}
+
+model Appointment {
+  id            String   @id @default(cuid())
+  orgId         String
+  facilityId    String
+  patientId     String
+  staffMemberId String?
+  serviceItemId String?
+  scheduledAt   DateTime
+  durationMin   Int      @default(30)
+  status        String   @default("SCHEDULED") // SCHEDULED | CHECKED_IN | COMPLETED | CANCELLED | NO_SHOW
+  notes         String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  staffMember StaffMember?  @relation(fields: [staffMemberId], references: [id])
+  serviceItem ServiceItem?  @relation(fields: [serviceItemId], references: [id])
+
+  @@index([orgId, facilityId, scheduledAt])
+  @@index([orgId, patientId])
+  @@index([orgId, status])
+}
+
+model QueueEntry {
+  id            String   @id @default(cuid())
+  orgId         String
+  facilityId    String
+  patientId     String
+  appointmentId String?
+  department    String   @default("GENERAL")
+  number        Int
+  status        String   @default("WAITING") // WAITING | CALLED | IN_SERVICE | COMPLETED | SKIPPED
+  priority      String   @default("NORMAL")  // NORMAL | URGENT
+  checkedInAt   DateTime @default(now())
+  calledAt      DateTime?
+  completedAt   DateTime?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  encounters Encounter[]
+
+  @@unique([orgId, facilityId, department, number, checkedInAt]) // number resets daily; uniqueness guarded in module
+  @@index([orgId, facilityId, status])
+  @@index([orgId, patientId])
+}
+
+model Encounter {
+  id            String    @id @default(cuid())
+  orgId         String
+  facilityId    String
+  patientId     String
+  appointmentId String?
+  queueEntryId  String?
+  staffMemberId String?
+  serviceLine   String    @default("GENERAL")
+  formKey       String    @default("GENERAL_CONSULT")
+  status        String    @default("OPEN") // OPEN | COMPLETED
+  formData      String    @default("{}")
+  diagnosis     String?
+  plan          String?
+  chargeItemIds String?   // comma-separated ServiceItem ids chosen at completion
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  patient    Patient      @relation(fields: [patientId], references: [id])
+  staffMember StaffMember? @relation("EncounterStaff", fields: [staffMemberId], references: [id])
+  queueEntry QueueEntry?  @relation(fields: [queueEntryId], references: [id])
+  invoices   Invoice[]
+
+  @@index([orgId, facilityId, startedAt])
+  @@index([orgId, patientId, status])
+}
+
+model FollowUp {
+  id          String   @id @default(cuid())
+  orgId       String
+  facilityId  String
+  patientId   String
+  encounterId String?
+  title       String
+  dueAt       DateTime
+  status      String   @default("PENDING") // PENDING | COMPLETED | CANCELLED
+  createdAt   DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([orgId, status, dueAt])
+  @@index([orgId, patientId])
+}
+
+// ─── Finance ────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id              String    @id @default(cuid())
+  orgId           String
+  facilityId      String
+  patientId       String
+  encounterId     String?
+  number          String
+  status          String    @default("DRAFT") // DRAFT | ISSUED | PARTIALLY_PAID | PAID | VOID
+  subtotalMinor   Int
+  discountMinor   Int       @default(0)
+  totalMinor      Int
+  amountPaidMinor Int       @default(0)
+  currency        String    @default("NGN")
+  note            String?
+  issuedAt        DateTime?
+  voidedAt        DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  patient   Patient       @relation(fields: [patientId], references: [id])
+  encounter Encounter?    @relation(fields: [encounterId], references: [id])
+  items     InvoiceItem[]
+  payments  Payment[]
+
+  @@unique([orgId, number])
+  @@index([orgId, facilityId, status])
+  @@index([orgId, patientId])
+  @@index([orgId, createdAt])
+}
+
+model InvoiceItem {
+  id              String @id @default(cuid())
+  invoiceId       String
+  orgId           String
+  serviceItemId   String?
+  name            String
+  quantity        Int    @default(1)
+  unitPriceMinor  Int
+  totalMinor      Int
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id          String    @id @default(cuid())
+  orgId       String
+  facilityId  String
+  invoiceId   String
+  number      String // receipt number RCP-…
+  method      String    @default("CASH") // CASH | TRANSFER | CARD | MOBILE
+  amountMinor Int
+  currency    String    @default("NGN")
+  reference   String?
+  voidedAt    DateTime?
+  voidReason  String?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@unique([orgId, number])
+  @@index([orgId, invoiceId])
+  @@index([orgId, facilityId, createdAt])
+}
+
+// ─── Supply chain (POS + inventory) ─────────────────────────────────────────
+
+model InventoryItem {
+  id                String  @id @default(cuid())
+  orgId             String
+  facilityId        String
+  category          String  @default("PHARMACEUTICAL") // PHARMACEUTICAL | CONSUMABLE | LAB | EQUIPMENT | OFFICE | OTHER
+  sku               String
+  barcode           String?
+  name              String
+  genericName       String?
+  dosageForm        String?
+  unit              String  @default("unit")
+  purchasePriceMinor Int    @default(0)
+  sellingPriceMinor Int    @default(0)
+  currency          String  @default("NGN")
+  reorderLevel      Int     @default(10)
+  active            Boolean @default(true)
+  createdAt         DateTime @default(now())
+
+  lots StockLot[]
+
+  @@unique([orgId, sku])
+  @@index([orgId, facilityId, category])
+  @@index([orgId, name])
+  @@index([orgId, barcode])
+}
+
+model StockLot {
+  id           String    @id @default(cuid())
+  orgId        String
+  itemId       String
+  batchNo      String
+  expiresAt    DateTime?
+  qtyReceived  Int
+  qtyRemaining Int
+  createdAt    DateTime  @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([orgId, expiresAt])
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  orgId     String
+  itemId    String
+  lotId     String?
+  type      String // RECEIPT | SALE | DISPENSE | ADJUSTMENT | DAMAGE | TRANSFER | RETURN
+  quantity  Int // signed: +in / -out
+  reason    String?
+  refType   String?
+  refId     String?
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([orgId, itemId, createdAt])
+}
+
+model Sale {
+  id              String    @id @default(cuid())
+  orgId           String
+  facilityId      String
+  number          String
+  patientId       String?
+  customerName    String?
+  status          String    @default("COMPLETED") // COMPLETED | VOID
+  subtotalMinor   Int
+  discountMinor   Int       @default(0)
+  totalMinor      Int
+  amountPaidMinor Int
+  method          String    @default("CASH")
+  reference       String?
+  voidedAt        DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+
+  patient Patient?    @relation(fields: [patientId], references: [id])
+  items   SaleItem[]
+
+  @@unique([orgId, number])
+  @@index([orgId, facilityId, createdAt])
+}
+
+model SaleItem {
+  id             String @id @default(cuid())
+  saleId         String
+  orgId          String
+  itemId         String
+  name           String
+  quantity       Int
+  unitPriceMinor Int
+  totalMinor     Int
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+}
+
+// ─── Workflow & automation ──────────────────────────────────────────────────
+
+model WorkflowDef {
+  id          String    @id @default(cuid())
+  orgId       String
+  key         String
+  name        String
+  description String?
+  status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  version     Int       @default(1)
+  definition  String // JSON: { nodes: [...], edges: [...] } — declarative, no executable code
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  runs WorkflowRun[]
+
+  @@unique([orgId, key])
+  @@index([orgId, status])
+}
+
+model WorkflowRun {
+  id            String    @id @default(cuid())
+  orgId         String
+  workflowDefId String
+  version       Int
+  triggerType   String // ENCOUNTER_COMPLETED | MANUAL | PATIENT_REGISTERED | …
+  triggerRefId  String?
+  status        String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
+  state         String    @default("{}") // JSON persisted run state
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  workflowDef WorkflowDef @relation(fields: [workflowDefId], references: [id])
+
+  @@index([orgId, status])
+  @@index([orgId, workflowDefId])
+}
+
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  orgId       String
+  type        String
+  payload     String
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([orgId, processedAt])
+}
+
+model Task {
+  id             String    @id @default(cuid())
+  orgId          String
+  facilityId     String?
+  title          String
+  description    String?
+  assigneeUserId String?
+  role           String?
+  priority       String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  dueAt          DateTime?
+  status         String    @default("OPEN") // OPEN | COMPLETED | CANCELLED
+  source         String    @default("USER") // USER | WORKFLOW | AI | SYSTEM
+  sourceId       String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([orgId, status])
+  @@index([orgId, assigneeUserId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  orgId     String
+  userId    String?
+  role      String?
+  type      String    @default("SYSTEM")
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([orgId, userId, readAt])
+}
+
+// ─── Audit ──────────────────────────────────────────────────────────────────
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  orgId       String?
+  facilityId  String?
+  actorUserId String?
+  actorLabel  String?
+  action      String
+  entityType  String
+  entityId    String?
+  summary     String
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([orgId, action])
+}
+
+// ─── AI ─────────────────────────────────────────────────────────────────────
+
+model AIConversation {
+  id         String   @id @default(cuid())
+  orgId      String
+  userId     String
+  facilityId String?
+  title      String   @default("New conversation")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages AIMessage[]
+
+  @@index([orgId, userId, updatedAt])
+}
+
+model AIMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String // user | assistant
+  content        String
+  toolCalls      String?
+  provenance     String?
+  createdAt      DateTime @default(now())
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// ─── Document numbering ─────────────────────────────────────────────────────
+
+model NumberSequence {
+  id  String @id // "{orgId}:{type}:{period}"
+  seq Int    @default(0)
+}
