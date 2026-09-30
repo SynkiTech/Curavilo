@@ -114,6 +114,9 @@ model StaffMember {
   facility     Facility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   encounters   Encounter[]   @relation("EncounterStaff")
+  certifications StaffCertification[]
+  leaveRequests  LeaveRequest[]
+  referralsReceived Referral[] @relation("ReferralStaff")
 
   @@index([orgId, facilityId])
   @@index([facilityId, designation])
@@ -165,6 +168,10 @@ model Patient {
   invoices     Invoice[]
   followUps    FollowUp[]
   sales        Sale[]
+  diagnosticOrders DiagnosticOrder[]
+  admissions   Admission[]
+  referrals    Referral[]
+  portalTokens PortalToken[]
 
   @@unique([orgId, mrn])
   @@index([orgId, facilityId])
@@ -443,7 +450,8 @@ model WorkflowDef {
   description String?
   status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
   version     Int       @default(1)
-  definition  String // JSON: { nodes: [...], edges: [...] } — declarative, no executable code
+  definition  String // JSON: { trigger, nodes: [...], edges: [...], schedule?, slaMinutes? } — declarative, no executable code
+  slaMinutes  Int? // run-level SLA; breach detected by scheduler
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -455,30 +463,60 @@ model WorkflowDef {
 }
 
 model WorkflowRun {
-  id            String    @id @default(cuid())
-  orgId         String
-  workflowDefId String
-  version       Int
-  triggerType   String // ENCOUNTER_COMPLETED | MANUAL | PATIENT_REGISTERED | …
-  triggerRefId  String?
-  status        String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
-  state         String    @default("{}") // JSON persisted run state
-  startedAt     DateTime  @default(now())
-  completedAt   DateTime?
+  id             String    @id @default(cuid())
+  orgId          String
+  workflowDefId  String
+  version        Int
+  triggerType    String // ENCOUNTER_COMPLETED | MANUAL | PAYMENT_RECEIVED | SCHEDULED | CUSTOM_WEBHOOK | …
+  triggerRefId   String?
+  correlationId  String? // idempotent event correlation (def+ref dedupe)
+  status         String    @default("RUNNING") // RUNNING | COMPLETED | FAILED | CANCELLED
+  dryRun         Boolean   @default(false)
+  state          String    @default("{}") // JSON persisted run state
+  lastError      String?
+  slaBreachedAt  DateTime?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
 
-  workflowDef WorkflowDef @relation(fields: [workflowDefId], references: [id])
+  workflowDef WorkflowDef       @relation(fields: [workflowDefId], references: [id])
+  nodes       WorkflowRunNode[]
 
   @@index([orgId, status])
   @@index([orgId, workflowDefId])
+  @@index([orgId, correlationId])
+}
+
+model WorkflowRunNode {
+  id             String    @id @default(cuid())
+  orgId          String
+  runId          String
+  nodeKey        String
+  type           String
+  status         String    @default("PENDING") // PENDING | RUNNING | SLEEPING | WAITING_APPROVAL | COMPLETED | SKIPPED | FAILED
+  attempts       Int       @default(0)
+  idempotencyKey String?
+  output         String? // JSON result of the node execution
+  error          String?
+  wakeAt         DateTime? // DELAY nodes + retry backoff
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, nodeKey])
+  @@index([orgId, status, wakeAt])
 }
 
 model OutboxEvent {
-  id          String    @id @default(cuid())
-  orgId       String
-  type        String
-  payload     String
-  processedAt DateTime?
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(cuid())
+  orgId           String
+  type            String
+  payload         String
+  dispatchAttempts Int      @default(0)
+  lastError       String?
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
 
   @@index([orgId, processedAt])
 }
@@ -494,13 +532,19 @@ model Task {
   priority       String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
   dueAt          DateTime?
   status         String    @default("OPEN") // OPEN | COMPLETED | CANCELLED
+  kind           String    @default("GENERAL") // GENERAL | APPROVAL
+  decision       String? // APPROVED | REJECTED (approval tasks)
+  decidedById    String?
+  decidedAt      DateTime?
   source         String    @default("USER") // USER | WORKFLOW | AI | SYSTEM
   sourceId       String?
+  slaNotifiedAt  DateTime?
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
 
   @@index([orgId, status])
   @@index([orgId, assigneeUserId])
+  @@index([orgId, kind, status])
 }
 
 model Notification {
@@ -516,6 +560,286 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([orgId, userId, readAt])
+}
+
+// ─── Communications & webhooks (Phase 6) ───────────────────────────────────
+
+model CommunicationMessage {
+  id              String    @id @default(cuid())
+  orgId           String
+  facilityId      String?
+  channel         String // EMAIL | SMS | WHATSAPP | IN_APP
+  type            String    @default("GENERAL") // APPOINTMENT_REMINDER | PAYMENT_CONFIRMATION | …
+  recipient       String? // email address / phone / role target
+  recipientUserId String?
+  subject         String?
+  bodyPreview     String? // truncated, non-sensitive-safe
+  status          String    @default("QUEUED") // QUEUED | SENT | SIMULATED | FAILED
+  provider        String    @default("console")
+  providerRef     String?
+  error           String?
+  source          String    @default("MANUAL") // WORKFLOW | MANUAL | SYSTEM | SCHEDULER
+  sourceId        String?
+  createdAt       DateTime  @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([orgId, channel, status])
+}
+
+model ProviderConfig {
+  id         String   @id @default(cuid())
+  orgId      String
+  channel    String // EMAIL | SMS | WHATSAPP
+  provider   String   @default("console") // console (dev simulation) | provider key
+  configJson String   @default("{}") // provider credentials live in env in production; only non-secret metadata here
+  updatedAt  DateTime @updatedAt
+
+  @@unique([orgId, channel])
+}
+
+model WebhookEndpoint {
+  id         String   @id @default(cuid())
+  orgId      String
+  key        String   @unique
+  url        String
+  secretHash String
+  events     String // CSV of event types this endpoint subscribes to
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@index([orgId])
+}
+
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  orgId          String
+  endpointId     String
+  eventType      String
+  payload        String
+  status         String    @default("PENDING") // PENDING | DELIVERED | FAILED | DEAD
+  attempts       Int       @default(0)
+  responseStatus Int?
+  lastError      String?
+  nextAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, nextAttemptAt])
+}
+
+// ─── Diagnostics / inpatient / referrals (Phase 9) ─────────────────────────
+
+model DiagnosticOrder {
+  id                   String    @id @default(cuid())
+  orgId                String
+  facilityId           String
+  patientId            String
+  encounterId          String?
+  kind                 String    @default("LAB") // LAB | IMAGING
+  serviceItemId        String?
+  testName             String
+  modality             String? // XRAY | ULTRASOUND | CT | MRI (IMAGING)
+  priority             String    @default("ROUTINE") // ROUTINE | URGENT
+  status               String    @default("ORDERED") // ORDERED | SPECIMEN_COLLECTED | RESULT_ENTERED | VERIFIED | RELEASED | CANCELLED
+  clinicalNotes        String?
+  orderedById          String
+  orderedAt            DateTime  @default(now())
+  specimenSite         String?
+  specimenCollectedById String?
+  specimenCollectedAt  DateTime?
+  resultsJson          String? // [{name, value, unit, refRange, flag}]
+  impression           String?
+  verifiedById         String?
+  verifiedAt           DateTime?
+  releasedById         String?
+  releasedAt           DateTime?
+  turnaroundMin        Int?
+  reportNumber         String?
+  cancelReason         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([orgId, facilityId, status])
+  @@index([orgId, patientId])
+  @@index([orgId, kind, status])
+}
+
+model Ward {
+  id           String  @id @default(cuid())
+  orgId        String
+  facilityId   String
+  name         String
+  genderPolicy String  @default("MIXED") // MALE | FEMALE | MIXED
+  active       Boolean @default(true)
+
+  beds       Bed[]
+  admissions Admission[]
+
+  @@index([orgId, facilityId])
+}
+
+model Bed {
+  id        String  @id @default(cuid())
+  orgId     String
+  wardId    String
+  label     String
+  status    String  @default("FREE") // FREE | OCCUPIED | MAINTENANCE
+
+  ward       Ward @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  admissions Admission[]
+
+  @@unique([wardId, label])
+  @@index([orgId, status])
+}
+
+model Admission {
+  id               String    @id @default(cuid())
+  orgId            String
+  facilityId       String
+  patientId        String
+  wardId           String
+  bedId            String
+  encounterId      String?
+  reason           String
+  admittedById     String
+  admittedAt       DateTime  @default(now())
+  status           String    @default("ADMITTED") // ADMITTED | DISCHARGED
+  dischargedAt     DateTime?
+  dischargeSummary String?
+  dischargeById    String?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  bed     Bed     @relation(fields: [bedId], references: [id])
+  ward    Ward    @relation(fields: [wardId], references: [id])
+
+  @@index([orgId, facilityId, status])
+  @@index([orgId, patientId])
+}
+
+model Referral {
+  id               String    @id @default(cuid())
+  orgId            String
+  facilityId       String
+  patientId        String
+  encounterId      String?
+  direction        String    @default("INTERNAL") // INTERNAL | EXTERNAL
+  toServiceLine    String?
+  toStaffMemberId  String?
+  externalFacility String?
+  notes            String?
+  status           String    @default("PENDING") // PENDING | ACCEPTED | COMPLETED | CANCELLED
+  createdById      String
+  createdAt        DateTime  @default(now())
+  resolvedAt       DateTime?
+
+  patient       Patient      @relation(fields: [patientId], references: [id])
+  toStaffMember StaffMember? @relation("ReferralStaff", fields: [toStaffMemberId], references: [id])
+
+  @@index([orgId, facilityId, status])
+  @@index([orgId, patientId])
+}
+
+// ─── Generated documents, ops alerts, simulation (Phases 10–11) ────────────
+
+model GeneratedDocument {
+  id          String   @id @default(cuid())
+  orgId       String
+  facilityId  String
+  kind        String // REPORT | AI_REPORT | DISCHARGE_SUMMARY | LAB_REPORT | REFERRAL_LETTER | WORKFLOW_DOC
+  title       String
+  contentJson String // structured document content (sections/tables) rendered by the document engine
+  sourceId    String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([orgId, kind, createdAt])
+}
+
+model OpsAlert {
+  id             String    @id @default(cuid())
+  orgId          String
+  facilityId     String?
+  metric         String
+  severity       String    @default("WARNING") // INFO | WARNING | CRITICAL
+  value          String
+  baseline       String?
+  message        String
+  fingerprint    String? // dedupe key per metric+window
+  acknowledgedAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([orgId, createdAt])
+  @@unique([orgId, fingerprint])
+}
+
+model SimulationScenario {
+  id          String   @id @default(cuid())
+  orgId       String
+  facilityId  String
+  name        String
+  paramsJson  String
+  resultJson  String?
+  seed        Int?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([orgId, facilityId, createdAt])
+}
+
+// ─── Portals & staff records (Phase 13) ────────────────────────────────────
+
+model StaffCertification {
+  id        String   @id @default(cuid())
+  orgId     String
+  staffId   String
+  name      String
+  expiresAt DateTime
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, expiresAt])
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  orgId       String
+  facilityId  String
+  staffId     String
+  fromAt      DateTime
+  toAt        DateTime
+  reason      String
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+}
+
+model PortalToken {
+  id         String    @id @default(cuid())
+  orgId      String
+  facilityId String
+  patientId  String
+  tokenHash  String    @unique
+  label      String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdById String
+  createdAt  DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, patientId])
 }
 
 // ─── Audit ──────────────────────────────────────────────────────────────────

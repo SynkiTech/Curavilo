@@ -1,7 +1,7 @@
 "use client";
 
 // Curavilo root — session boot, landing/onboarding/app-shell routing
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { apiGet, type SessionInfo } from "./api";
@@ -21,6 +21,14 @@ import { Inventory } from "./inventory";
 import { Reports } from "./reports";
 import { AIChat } from "./ai-chat";
 import { Workflows, Audit, Staff, FollowUps, Settings } from "./admin";
+import { Lab } from "./lab";
+import { Wards } from "./wards";
+import { Command } from "./command";
+import { Simulation } from "./simulation";
+import { Comms } from "./comms";
+import { DataPortals } from "./data";
+import { MyDay } from "./myday";
+import { PatientPortal } from "./patient-portal";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000, refetchOnWindowFocus: false } },
@@ -28,6 +36,7 @@ const queryClient = new QueryClient({
 
 export function CuraviloApp() {
   const { booted, session, route, setBooted, setSession, navigate } = useApp();
+  const [portalOpen, setPortalOpen] = useState(false);
 
   useEffect(() => {
     apiGet<SessionInfo>("/api/auth")
@@ -49,7 +58,13 @@ export function CuraviloApp() {
 
   let screen: React.ReactNode;
   if (!session?.authenticated) {
-    screen = route.view === "onboarding" ? <Onboarding onBack={() => navigate("overview")} /> : <Landing onOpenOnboarding={() => navigate("onboarding")} />;
+    if (portalOpen) {
+      screen = <PatientPortal onBack={() => setPortalOpen(false)} />;
+    } else {
+      screen = route.view === "onboarding"
+        ? <Onboarding onBack={() => navigate("overview")} />
+        : <Landing onOpenOnboarding={() => navigate("onboarding")} onOpenPortal={() => setPortalOpen(true)} />;
+    }
   } else {
     screen = (
       <Shell>
@@ -82,6 +97,13 @@ function Screen() {
     case "inventory": return <Inventory />;
     case "reports": return <Reports />;
     case "ai": return <AIChat />;
+    case "lab": return <Lab />;
+    case "wards": return <Wards />;
+    case "command": return <Command />;
+    case "simulation": return <Simulation />;
+    case "comms": return <Comms />;
+    case "data": return <DataPortals />;
+    case "myday": return <MyDay />;
     case "workflows": return <Workflows />;
     case "audit": return <Audit />;
     case "staff": return <Staff />;

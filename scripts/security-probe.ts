@@ -47,6 +47,25 @@ async function main() {
   if ((await probe("eye-clinic GET other-tenant patient", `/api/patients/${gracefieldPatient.id}`, owner)) !== 404) failures++;
   if ((await probe("eye-clinic GET other-tenant invoice", `/api/invoices?id=${gracefieldInvoice.id}`, owner)) !== 404) failures++;
 
+  // ── Phase 5–13 surface: anonymous + RBAC probes ──
+  const anonRoutes = ["/api/lab", "/api/wards", "/api/command", "/api/simulation", "/api/comms", "/api/webhooks", "/api/data?export=patients", "/api/portal", "/api/health"];
+  for (const r of anonRoutes) {
+    const expect = r === "/api/health" ? 200 : 401;
+    if ((await probe(`anon GET ${r}`, r, null)) !== expect) failures++;
+  }
+  // receptionist lacks lab:operate / inpatient:manage / workflows:manage / data:manage / settings:manage
+  for (const r of ["/api/lab", "/api/wards", "/api/data?export=patients", "/api/comms", "/api/webhooks"]) {
+    const status = await probe(`reception GET ${r}`, r, reception);
+    if (status !== 403 && status !== 400) failures++;
+  }
+  // workflows GET is intentionally viewable to staff (manage is gated separately)
+  {
+    const status = await probe("reception GET /api/workflows", "/api/workflows", reception);
+    if (status !== 200) failures++;
+  }
+  // FHIR: anon must be rejected; owner allowed on Patient
+  if ((await probe("anon GET /api/fhir/Patient", "/api/fhir/Patient", null)) !== 401) failures++;
+
   // RBAC: receptionist lacks payments:record
   const ownInvoice = await db.invoice.findFirst({
     where: { orgId: eyeOrg.id, status: { in: ["ISSUED", "PARTIALLY_PAID"] } },

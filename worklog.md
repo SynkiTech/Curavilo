@@ -66,3 +66,28 @@ Work Log:
 
 Stage Summary:
 - Both reported flows are fixed and browser-verified; auth screens now have the requested animated cool-gradient background with floating medical icons. Next: consider dark-mode shell parity, or move on to Phase 5 workflow builder per roadmap.
+
+---
+Task ID: 3
+Agent: main (Super Z)
+Task: Complete remaining phases 5–14 of the master spec (§133–142)
+
+Work Log:
+- Schema: +20 models (WorkflowRunNode, CommunicationMessage, ProviderConfig, WebhookEndpoint/Delivery, DiagnosticOrder, Ward/Bed/Admission, Referral, GeneratedDocument, OpsAlert, SimulationScenario, StaffCertification, LeaveRequest, PortalToken) + fields (run correlation/dryRun/SLA, Task kind/decision). Single `prisma db push`.
+- P5 Workflow engine (src/modules/workflows.ts rewritten): 14 node types, durable per-node state, retries (3 attempts, exp backoff) + dead-letter, idempotency keys + correlation dedupe, DELAY parking, CONDITION branch edges, APPROVAL gates via kind=APPROVAL tasks, dry-run mode, immutable publish (edit published → new draft version), run SLA. Builder UI (workflow-builder.tsx, zero-dep structured editor, ADR 0007) with dry-run preview; runs show per-node status; approvals panel with approve/reject resume.
+- P6 Automation (src/modules/automation.ts, lib/comms.ts, modules/webhooks.ts): outbox dispatch → workflow + webhook fan-out; provider-neutral adapters (console simulation, vendor registry documented); comms log + manual send + channel config UI; webhook HMAC signing, retry/backoff, dead-letter; scheduled triggers (everyMinutes/dailyAt); detection jobs (missed appointments, overdue invoices, stock threshold/expiry, due follow-ups); SLA sweep. PAYMENT_RECEIVED emitted transactionally in recordPayment.
+- P7 AI: multi-step chains (≤3 tools), ACT-mode (LOW-risk create_follow_up/create_task/generate_report, human confirmation in chat UI + audited execution via /api/ai/act); eval suite tests/ai-eval.ts (offline 6/6 ✓ + --live incl. injection/hallucination).
+- P9 Diagnostics/Inpatient (modules/diagnostics.ts, inpatient.ts): DiagnosticOrder state machine (ORDERED→SPECIMEN_COLLECTED→RESULT_ENTERED→VERIFIED→RELEASED, TAT + report numbering + GeneratedDocument + release event), wards/beds with occupancy-locked admissions, discharge summaries as documents, referrals (internal/external) + lifecycle.
+- P8 Profiles: +Maternity, Pediatrics, Orthopedics, ENT, Physiotherapy, Fertility, Mental Health (12 total) with terminology/forms/catalogues.
+- P10 Simulation (lib/simulation.ts): seeded mulberry32 DES, Poisson arrivals, lognormal-ish service, capacity/routing, urgent queue-jump; calibration from 14-day aggregates (arrivals + consultation mean/SD); 5-seed median/p10–p90 output; scenario UI (volume slider + per-station servers); ADR 0008; disclaimer.
+- P11 Command center (modules/analytics.ts): §55 metrics, z≥2 anomaly alerts (deduped OpsAlerts + acknowledge), bottleneck ranking, AI-explain hook, scenario launcher, 60s auto-refresh.
+- P12 Interop (lib/fhir.ts, modules/data.ts): FHIR R4 read-only Bundle export for 11 resources (permission map, audited, OperationOutcome errors); CSV import wizard (validate → preview errors/duplicates → transactional commit → audit); audited CSV exports (patients/invoices/appointments).
+- P13 Portals (modules/portal.ts): staff My Day view; patient portal with hashed access codes (7d TTL, revocable), separate portal cookie, 10/15min rate limit, strictly scoped read-only data (appointments, invoices+outstanding, released results, follow-ups, recent visits); leave approval flow.
+- P14 Hardening: /api/health (db + outbox/webhook backlog); security-probe extended (14 anon probes + RBAC matrix incl. FHIR/portal) — ALL PASSED; backup/restore drill (scripts/backup-drill.ts) PASSED (7 tables verified); AI eval suite; ADRs 0006–0010; docs/PRODUCTION-READINESS.md (runbooks + production gates).
+- Scheduler: src/lib/scheduler.ts + instrumentation.ts (30s tick; DB is the source of truth; pg-boss/BullMQ swap documented).
+- RBAC: +6 permissions (workflows:manage, lab:operate, inpatient:manage, portals:manage, data:manage) mapped to roles + nav modules; new nav group entries (My Day, Lab & Radiology, Wards, Command Center, Simulation, Communications, Data & Portals).
+- Verification: tsc 0 errors (src), eslint clean; scripts/verify-phases.sh (33 checks), verify-final-e2e.sh (full outpatient workflow: CREATE_TASK→CREATE_FOLLOWUP(real FK)→NOTIFY→DELAY 60s park SLEEPING→scheduler wake→GENERATE_DOCUMENT→COMPLETED); lab release flow with report LAB-20260930-000001; FHIR bundles; portal E2E (issue code → login → scoped data → staff API blocked); browser screenshots (download/ui-*.png).
+- Ops note: sandbox reaps user-spawned background processes between tool calls; dev server is gateway-managed (starts on session boot / on demand). No .zscripts/dev.sh created (would skip bun install/db:push at boot).
+
+Stage Summary:
+- Phases 5–14 implemented and verified end-to-end (API + browser + security probes + eval suites). ROADMAP.md now ✅ across the board except deferred Phase 4 supplier/PO extras and external production gates (pen-test, load, DPIA).

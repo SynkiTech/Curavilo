@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Users, CalendarDays, ListOrdered, ClipboardPlus, ReceiptText, ShoppingCart,
   Boxes, BarChart3, Sparkles, Workflow as WorkflowIcon, ScrollText, UserCog, Settings, Bell,
   Search, LogOut, HeartPulse, ChevronsUpDown, Check,
+  FlaskConical, BedDouble, Gauge, Shuffle, MessageSquareText, DatabaseBackup, CalendarCheck2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +31,19 @@ const NAV: NavItem[] = [
   { view: "queue", label: "Queue", icon: ListOrdered, group: "Operations" },
   { view: "encounters", label: "Encounters", icon: ClipboardPlus, group: "Operations" },
   { view: "followups", label: "Follow-ups", icon: Bell, group: "Operations" },
+  { view: "myday", label: "My Day", icon: CalendarCheck2, group: "Operations" },
+  { view: "lab", label: "Lab & Radiology", icon: FlaskConical, group: "Operations" },
+  { view: "wards", label: "Wards & Admissions", icon: BedDouble, group: "Operations" },
   { view: "billing", label: "Billing", icon: ReceiptText, group: "Finance" },
   { view: "pos", label: "POS / Pharmacy", icon: ShoppingCart, group: "Finance" },
   { view: "reports", label: "Reports", icon: BarChart3, group: "Finance" },
   { view: "inventory", label: "Inventory", icon: Boxes, group: "Supply" },
   { view: "ai", label: "AI Assistant", icon: Sparkles, group: "Intelligence" },
   { view: "workflows", label: "Workflows", icon: WorkflowIcon, group: "Intelligence" },
+  { view: "command", label: "Command Center", icon: Gauge, group: "Intelligence" },
+  { view: "simulation", label: "Simulation", icon: Shuffle, group: "Intelligence" },
+  { view: "comms", label: "Communications", icon: MessageSquareText, group: "Administration" },
+  { view: "data", label: "Data & Portals", icon: DatabaseBackup, group: "Administration" },
   { view: "staff", label: "Staff", icon: UserCog, group: "Administration" },
   { view: "audit", label: "Audit Log", icon: ScrollText, group: "Administration" },
   { view: "settings", label: "Settings", icon: Settings, group: "Administration" },

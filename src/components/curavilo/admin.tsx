@@ -1,9 +1,9 @@
 "use client";
 
-// Admin views: Workflows, Audit, Settings, Staff, Follow-ups
+// Admin views: Workflows (builder), Audit, Settings, Staff, Follow-ups
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Play, Plus, CircleCheck, CircleX } from "lucide-react";
+import { Loader2, Play, Plus, CircleCheck, CircleX, Wrench, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,26 +13,32 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiGet, apiSend, formatMoney, formatDate, formatDateTime, type FollowUp, type StaffMember, type ServiceItem, type SessionInfo } from "./api";
 import { LoadingState, ErrorState, EmptyState, PageHeader, StatusBadge } from "./ui-kit";
+import { WorkflowBuilderDialog, type BuilderInitial, type BuilderNode } from "./workflow-builder";
+
 import { useApp } from "./store";
 import { toast } from "sonner";
 
 // ─── Workflows ──────────────────────────────────────────────────────────────
 
-interface WorkflowDef { id: string; key: string; name: string; description?: string | null; status: string; version: number; definition: string }
-interface WorkflowRun { id: string; status: string; version: number; triggerType: string; startedAt: string; completedAt?: string | null; workflowDef: { name: string } }
+interface WorkflowDef { id: string; key: string; name: string; description?: string | null; status: string; version: number; definition: string; slaMinutes?: number | null }
+interface RunNode { nodeKey: string; type: string; status: string; attempts: number; output?: string | null; error?: string | null; wakeAt?: string | null }
+interface WorkflowRun { id: string; status: string; version: number; triggerType: string; startedAt: string; completedAt?: string | null; dryRun: boolean; lastError?: string | null; slaBreachedAt?: string | null; workflowDef: { name: string }; nodes?: RunNode[] }
+interface ApprovalTask { id: string; title: string; description?: string | null; status: string; decision?: string | null; createdAt: string; dueAt?: string | null; source: string }
 
 export function Workflows() {
   const { session } = useApp();
-  const canManage = session?.user?.permissions.includes("settings:manage");
+  const canManage = session?.user?.permissions.includes("workflows:manage") || session?.user?.permissions.includes("settings:manage");
   const queryClient = useQueryClient();
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [editing, setEditing] = useState<WorkflowDef | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["workflows"],
-    queryFn: () => apiGet<{ workflows: WorkflowDef[]; runs: WorkflowRun[] }>("/api/workflows"),
+    queryFn: () => apiGet<{ nodeTypes: string[]; triggers: string[]; workflows: WorkflowDef[]; runs: WorkflowRun[]; approvals: ApprovalTask[] }>("/api/workflows"),
   });
 
   const toggle = useMutation({
-    mutationFn: (workflowId: string) => apiSend("PATCH", "/api/workflows", { action: "PUBLISH_TOGGLE", workflowId }),
+    mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "PUBLISH_TOGGLE", workflowId }),
     onSuccess: () => {
       toast.success("Workflow state changed.");
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
@@ -41,7 +47,7 @@ export function Workflows() {
   });
 
   const run = useMutation({
-    mutationFn: (workflowId: string) => apiSend("PATCH", "/api/workflows", { action: "RUN", workflowId }),
+    mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "RUN", workflowId, payload: {} }),
     onSuccess: () => {
       toast.success("Workflow run completed — check runs below.");
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
@@ -49,31 +55,81 @@ export function Workflows() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const decide = useMutation({
+    mutationFn: (input: { taskId: string; decision: "APPROVED" | "REJECTED" }) => apiSend("POST", "/api/workflows", { action: "RESOLVE_APPROVAL", ...input }),
+    onSuccess: () => {
+      toast.success("Decision recorded — the workflow resumed.");
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   return (
     <div>
-      <PageHeader title="Workflows" subtitle="Versioned, declarative automations — no executable code, reviewed before publishing." />
+      <PageHeader
+        title="Workflows"
+        subtitle="Durable, declarative automations — timers, conditions, approvals, retries and SLAs. Publish before they trigger on live events."
+        actions={canManage ? (
+          <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
+            <Plus className="mr-1.5 h-4 w-4" /> Build workflow
+          </Button>
+        ) : null}
+      />
 
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
 
       {data ? (
         <div className="space-y-6">
+          <section aria-label="Approvals" className="space-y-2">
+            <h2 className="text-sm font-semibold text-stone-600">Pending approvals</h2>
+            {data.approvals.filter((a) => a.status === "OPEN").length === 0 ? (
+              <p className="rounded-lg border bg-white px-4 py-4 text-center text-xs text-muted-foreground">No approvals waiting.</p>
+            ) : (
+              data.approvals.filter((a) => a.status === "OPEN").map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <p className="text-xs text-muted-foreground">{a.description}{a.dueAt ? ` · SLA due ${formatDateTime(a.dueAt, session?.user?.timezone)}` : ""}</p>
+                  </div>
+                  {canManage ? (
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => decide.mutate({ taskId: a.id, decision: "APPROVED" })} disabled={decide.isPending}>
+                        <ThumbsUp className="mr-1 h-3.5 w-3.5" /> Approve
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-red-700" onClick={() => decide.mutate({ taskId: a.id, decision: "REJECTED" })} disabled={decide.isPending}>
+                        <ThumbsDown className="mr-1 h-3.5 w-3.5" /> Reject
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </section>
+
           <section aria-label="Definitions" className="space-y-2">
             {data.workflows.length === 0 ? (
-              <EmptyState title="No workflows yet" hint="Seeded facilities ship with an outpatient follow-up workflow." />
+              <EmptyState title="No workflows yet" hint="Build one — e.g. an outpatient flow: create task → notify → wait 24h → create follow-up." />
             ) : (
-              data.workflows.map((wf) => (
+              data.workflows.map((wf) => {
+                let nodeCount = 0;
+                try { nodeCount = (JSON.parse(wf.definition) as { nodes?: unknown[] }).nodes?.length ?? 0; } catch { nodeCount = 0; }
+                return (
                 <div key={wf.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white p-4">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{wf.name}</span>
                       <StatusBadge status={wf.status} />
                       <Badge variant="outline" className="text-[10px]">v{wf.version}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{nodeCount} steps</Badge>
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">{wf.description ?? wf.key}</p>
                   </div>
                   {canManage ? (
                     <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => { setEditing(wf); setBuilderOpen(true); }}>
+                        <Wrench className="mr-1 h-3.5 w-3.5" /> Builder
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => toggle.mutate(wf.id)} disabled={toggle.isPending}>
                         {wf.status === "PUBLISHED" ? "Archive" : "Publish"}
                       </Button>
@@ -83,7 +139,8 @@ export function Workflows() {
                     </div>
                   ) : null}
                 </div>
-              ))
+                );
+              })
             )}
           </section>
 
@@ -92,14 +149,30 @@ export function Workflows() {
             {data.runs.length === 0 ? (
               <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-muted-foreground">No runs yet.</p>
             ) : (
-              <ul className="overflow-hidden rounded-lg border bg-white divide-y text-sm">
+              <ul className="divide-y overflow-hidden rounded-lg border bg-white text-sm">
                 {data.runs.map((r) => (
-                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-                    <span>
-                      <span className="font-medium">{r.workflowDef.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{r.triggerType.replaceAll("_", " ")} · {formatDateTime(r.startedAt, session?.user?.timezone)}</span>
-                    </span>
-                    <StatusBadge status={r.status} />
+                  <li key={r.id} className="px-3 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        <span className="font-medium">{r.workflowDef.name}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{r.triggerType.replaceAll("_", " ")} · {formatDateTime(r.startedAt, session?.user?.timezone)}</span>
+                        {r.slaBreachedAt ? <Badge variant="outline" className="ml-1.5 border-red-200 bg-red-50 text-[10px] text-red-700">SLA breached</Badge> : null}
+                      </span>
+                      <StatusBadge status={r.status} />
+                    </div>
+                    {r.nodes && r.nodes.length > 0 ? (
+                      <ol className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+                        {r.nodes.map((n, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${n.status === "COMPLETED" ? "bg-emerald-500" : n.status === "FAILED" ? "bg-red-500" : n.status === "PENDING" ? "bg-stone-300" : "bg-amber-400"}`} aria-hidden />
+                            <span>{n.nodeKey} · {n.type.replaceAll("_", " ")} · {n.status.toLowerCase()}{n.attempts > 1 ? ` (attempt ${n.attempts})` : ""}</span>
+                            {n.output ? <span className="truncate">— {n.output.slice(0, 70)}</span> : null}
+                            {n.error ? <span className="text-red-600">— {n.error.slice(0, 60)}</span> : null}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : null}
+                    {r.lastError ? <p className="mt-1 text-xs text-red-600">{r.lastError}</p> : null}
                   </li>
                 ))}
               </ul>
@@ -107,8 +180,28 @@ export function Workflows() {
           </section>
         </div>
       ) : null}
+
+      <WorkflowBuilderDialog
+        open={builderOpen}
+        onClose={() => setBuilderOpen(false)}
+        initial={editing ? { workflowId: editing.id, key: editing.key, name: editing.name, definition: safeParse(editing.definition)?.definition, slaMinutes: editing.slaMinutes } : undefined}
+      />
     </div>
   );
+}
+
+function safeParse(def: string): BuilderInitial | undefined {
+  try {
+    const parsed = JSON.parse(def) as { trigger?: string; nodes?: Array<{ id: string; type: string; config: Record<string, unknown> }>; schedule?: { everyMinutes?: number; dailyAt?: string } };
+    return {
+      definition: {
+        ...parsed,
+        nodes: parsed.nodes?.map((n) => ({ id: n.id, type: n.type as BuilderNode["type"], config: Object.fromEntries(Object.entries(n.config ?? {}).map(([k, v]) => [k, String(v)])) })),
+      },
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 // ─── Audit ──────────────────────────────────────────────────────────────────

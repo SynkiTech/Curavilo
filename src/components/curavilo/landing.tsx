@@ -2,7 +2,7 @@
 
 // Landing + Auth (login/register entry)
 import { useState } from "react";
-import { HeartPulse, LogIn, Building2, Loader2, Info } from "lucide-react";
+import { HeartPulse, LogIn, Building2, Loader2, Info, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { AnimatedBackground } from "./animated-bg";
 
 const NETWORK_PROBLEM = "Cannot reach the server right now — it may be starting up. Please wait a moment and try again.";
 
-export function Landing({ onOpenOnboarding }: { onOpenOnboarding: () => void }) {
+export function Landing({ onOpenOnboarding, onOpenPortal }: { onOpenOnboarding: () => void; onOpenPortal?: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -113,6 +113,11 @@ export function Landing({ onOpenOnboarding }: { onOpenOnboarding: () => void }) 
             <Button variant="outline" className="w-full" onClick={onOpenOnboarding}>
               <Building2 className="mr-2 h-4 w-4" /> Register your facility
             </Button>
+            {onOpenPortal ? (
+              <Button variant="ghost" className="w-full text-muted-foreground" onClick={onOpenPortal}>
+                <KeyRound className="mr-2 h-4 w-4" /> Patient portal — view my records
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       </div>

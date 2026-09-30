@@ -5,7 +5,7 @@
 export interface FormField {
   key: string;
   label: string;
-  type: "text" | "number" | "textarea" | "select" | "date";
+  type: "text" | "number" | "textarea" | "select" | "multiselect" | "checkbox" | "date";
   required?: boolean;
   options?: string[];
   unit?: string;
@@ -251,6 +251,276 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       { code: "LAB-FCB", name: "FBC (Full Blood Count)", category: "LAB", priceMinor: 350000 },
       { code: "IMG-XRAY", name: "X-Ray (Plain)", category: "IMAGING", priceMinor: 1200000 },
       { code: "WARD-DAY", name: "Ward Admission (per day)", category: "OTHER", priceMinor: 2000000 },
+    ],
+    modules: {},
+  },
+
+  MATERNITY: {
+    key: "MATERNITY",
+    name: "Maternity / Obstetrics",
+    description: "Antenatal care, delivery, postnatal follow-up and family planning.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "patient.label": "Mother",
+      "visit.label": "Antenatal Visit",
+      "consultation.label": "Antenatal Consultation",
+      "followup.label": "Antenatal Next Visit",
+      "doctor.label": "Obstetrician",
+    },
+    form: {
+      key: "ANC_VISIT",
+      title: "Antenatal Visit",
+      sections: [
+        VITALS_SECTION,
+        {
+          title: "Pregnancy",
+          fields: [
+            { key: "gestationalAge", label: "Gestational Age (weeks)", type: "number", required: true },
+            { key: "fundalHeight", label: "Fundal Height (cm)", type: "number" },
+            { key: "fetalHeart", label: "Fetal Heart Rate (bpm)", type: "number" },
+            { key: "presentation", label: "Presentation", type: "select", options: ["Cephalic", "Breech", "Transverse", "Unknown"] },
+          ],
+        },
+        {
+          title: "Assessment",
+          fields: [
+            { key: "riskFlags", label: "Risk Flags", type: "multiselect", options: ["Hypertension", "Anaemia", "Previous CS", "Multiple Gestation", "None"] },
+            { key: "plan", label: "Plan", type: "textarea" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "CONS-ANC", name: "Antenatal Consultation", category: "CONSULTATION", priceMinor: 2500000 },
+      { code: "PROC-ANC-PKG", name: "Antenatal Package (per month)", category: "PROCEDURE", priceMinor: 25000000 },
+      { code: "PROC-DEL-N", name: "Normal Delivery", category: "PROCEDURE", priceMinor: 120000000 },
+      { code: "PROC-DEL-CS", name: "Caesarean Section", category: "PROCEDURE", priceMinor: 450000000 },
+      { code: "LAB-PREG", name: "Pregnancy Test", category: "LAB", priceMinor: 100000 },
+      { code: "US-OBST", name: "Obstetric Ultrasound", category: "IMAGING", priceMinor: 2000000 },
+    ],
+    modules: { wards: true },
+  },
+
+  PEDIATRICS: {
+    key: "PEDIATRICS",
+    name: "Pediatrics",
+    description: "Child health, immunisation tracking, growth monitoring and pediatric care.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "patient.label": "Child",
+      "patient.plural": "Children",
+      "consultation.label": "Pediatric Consultation",
+      "followup.label": "Review",
+      "doctor.label": "Pediatrician",
+    },
+    form: {
+      key: "PED_EXAM",
+      title: "Pediatric Examination",
+      sections: [
+        {
+          title: "Growth & Vitals",
+          fields: [
+            { key: "weight", label: "Weight (kg)", type: "number", required: true },
+            { key: "height", label: "Height (cm)", type: "number", required: true },
+            { key: "temp", label: "Temperature", type: "number", unit: "°C" },
+            { key: "muac", label: "MUAC (cm)", type: "number" },
+          ],
+        },
+        {
+          title: "Immunisation & Assessment",
+          fields: [
+            { key: "immunisation", label: "Immunisation Status", type: "select", options: ["Up to date", "Behind schedule", "Unknown"] },
+            { key: "vaccineGiven", label: "Vaccine Given Today", type: "text" },
+            { key: "findings", label: "Findings", type: "textarea" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "CONS-PED", name: "Pediatric Consultation", category: "CONSULTATION", priceMinor: 2000000 },
+      { code: "VAC-ROUTE", name: "Routine Immunisation", category: "PROCEDURE", priceMinor: 500000 },
+      { code: "EXAM-WELL", name: "Well-Child Check", category: "EXAMINATION", priceMinor: 1200000 },
+      { code: "LAB-MPS", name: "Malaria Parasite (RDT/Microscopy)", category: "LAB", priceMinor: 200000 },
+    ],
+    modules: {},
+  },
+
+  ORTHOPEDICS: {
+    key: "ORTHOPEDICS",
+    name: "Orthopedics",
+    description: "Bone, joint and trauma care with imaging-first workflows.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "consultation.label": "Orthopedic Consultation",
+      "procedure.label": "Orthopedic Procedure",
+      "doctor.label": "Orthopedic Surgeon",
+    },
+    form: {
+      key: "ORTH_EXAM",
+      title: "Orthopedic Examination",
+      sections: [
+        {
+          title: "Injury / Complaint",
+          fields: [
+            { key: "mechanism", label: "Mechanism of Injury", type: "textarea", required: true },
+            { key: "region", label: "Region", type: "select", options: ["Upper Limb", "Lower Limb", "Spine", "Pelvis", "Other"] },
+            { key: "romLimited", label: "Range of Motion Limited", type: "checkbox" },
+          ],
+        },
+        {
+          title: "Assessment",
+          fields: [
+            { key: "xrayFindings", label: "X-ray Findings", type: "textarea" },
+            { key: "plan", label: "Plan", type: "textarea" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "CONS-ORTH", name: "Orthopedic Consultation", category: "CONSULTATION", priceMinor: 3000000 },
+      { code: "IMG-XRAY", name: "X-Ray (Plain)", category: "IMAGING", priceMinor: 1200000 },
+      { code: "PROC-POP", name: "Plaster of Paris Cast", category: "PROCEDURE", priceMinor: 8000000 },
+      { code: "PROC-REDUCT", name: "Closed Reduction", category: "PROCEDURE", priceMinor: 25000000 },
+      { code: "PT-SESSION", name: "Physiotherapy Session", category: "PROCEDURE", priceMinor: 3000000 },
+    ],
+    modules: { wards: true },
+  },
+
+  ENT: {
+    key: "ENT",
+    name: "ENT (Otolaryngology)",
+    description: "Ear, nose and throat care including audiology and endoscopy.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "consultation.label": "ENT Consultation",
+      "doctor.label": "ENT Surgeon",
+    },
+    form: {
+      key: "ENT_EXAM",
+      title: "ENT Examination",
+      sections: [
+        {
+          title: "Examination",
+          fields: [
+            { key: "ear", label: "Ear Findings", type: "textarea" },
+            { key: "nose", label: "Nose / Sinus Findings", type: "textarea" },
+            { key: "throat", label: "Throat Findings", type: "textarea" },
+            { key: "audiometry", label: "Audiometry (if done)", type: "text" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "CONS-ENT", name: "ENT Consultation", category: "CONSULTATION", priceMinor: 2500000 },
+      { code: "PROC-SYRING", name: "Ear Syringing", category: "PROCEDURE", priceMinor: 800000 },
+      { code: "PROC-AUDIO", name: "Audiometry", category: "EXAMINATION", priceMinor: 1500000 },
+      { code: "IMG-CT-ENT", name: "CT Sinuses", category: "IMAGING", priceMinor: 6000000 },
+    ],
+    modules: {},
+  },
+
+  PHYSIOTHERAPY: {
+    key: "PHYSIOTHERAPY",
+    name: "Physiotherapy",
+    description: "Rehabilitation sessions, mobility scoring and therapy plans.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "patient.label": "Client",
+      "visit.label": "Session",
+      "consultation.label": "Physiotherapy Assessment",
+      "followup.label": "Next Session",
+      "doctor.label": "Physiotherapist",
+    },
+    form: {
+      key: "PT_SESSION",
+      title: "Physiotherapy Session",
+      sections: [
+        {
+          title: "Assessment",
+          fields: [
+            { key: "painScore", label: "Pain Score (0–10)", type: "number", required: true },
+            { key: "mobility", label: "Mobility", type: "select", options: ["Independent", "Walker", "Crutches", "Wheelchair", "Bed-bound"] },
+            { key: "exercisesDone", label: "Exercises Performed", type: "textarea" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "PT-ASSESS", name: "Physiotherapy Assessment", category: "CONSULTATION", priceMinor: 2500000 },
+      { code: "PT-SESSION", name: "Physiotherapy Session", category: "PROCEDURE", priceMinor: 3000000 },
+      { code: "PT-PKG", name: "Rehab Package (6 sessions)", category: "PROCEDURE", priceMinor: 15000000 },
+    ],
+    modules: {},
+  },
+
+  FERTILITY: {
+    key: "FERTILITY",
+    name: "Fertility Clinic",
+    description: "Fertility assessments, cycle tracking and treatment cycles.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "visit.label": "Cycle Visit",
+      "consultation.label": "Fertility Consultation",
+      "doctor.label": "Fertility Specialist",
+    },
+    form: {
+      key: "FERT_VISIT",
+      title: "Fertility Visit",
+      sections: [
+        {
+          title: "Cycle",
+          fields: [
+            { key: "cycleDay", label: "Cycle Day", type: "number", required: true },
+            { key: "lmp", label: "LMP", type: "date" },
+            { key: "scanFindings", label: "Scan Findings (follicle tracking)", type: "textarea" },
+          ],
+        },
+        {
+          title: "Plan",
+          fields: [
+            { key: "medications", label: "Medications", type: "textarea" },
+            { key: "nextSteps", label: "Next Steps", type: "textarea" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "CONS-FERT", name: "Fertility Consultation", category: "CONSULTATION", priceMinor: 5000000 },
+      { code: "US-FOLL", name: "Follicular Tracking Scan", category: "IMAGING", priceMinor: 2500000 },
+      { code: "LAB-HSG", name: "Hormone Profile", category: "LAB", priceMinor: 4500000 },
+      { code: "LAB-SEMEN", name: "Semen Analysis", category: "LAB", priceMinor: 1500000 },
+    ],
+    modules: {},
+  },
+
+  MENTAL_HEALTH: {
+    key: "MENTAL_HEALTH",
+    name: "Mental Health",
+    description: "Psychiatric consultations, therapy notes and risk assessment.",
+    terminology: {
+      ...DEFAULT_TERMINOLOGY,
+      "consultation.label": "Therapy / Psychiatric Session",
+      "followup.label": "Next Session",
+      "doctor.label": "Clinician",
+    },
+    form: {
+      key: "MH_SESSION",
+      title: "Mental Health Session",
+      sections: [
+        {
+          title: "Session",
+          fields: [
+            { key: "mood", label: "Mood (1–10)", type: "number", required: true },
+            { key: "riskAssessment", label: "Risk Assessment", type: "select", options: ["None identified", "Low", "Moderate", "High — escalate"], required: true },
+            { key: "sessionNotes", label: "Session Notes (confidential)", type: "textarea" },
+          ],
+        },
+      ],
+    },
+    catalogue: [
+      { code: "CONS-MH", name: "Psychiatric Consultation", category: "CONSULTATION", priceMinor: 3500000 },
+      { code: "TH-CBT", name: "Therapy Session (CBT)", category: "PROCEDURE", priceMinor: 4000000 },
+      { code: "LAB-LEVELS", name: "Medication Level Monitoring", category: "LAB", priceMinor: 1500000 },
     ],
     modules: {},
   },

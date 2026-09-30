@@ -1,22 +1,22 @@
 # Curavilo — Roadmap
 
-Phased per master spec §128–142. ✅ = this milestone, 🚧 = partially implemented, ⬜ = future.
+Phased per master spec §128–142. ✅ = complete, 🚧 = partially implemented, ⬜ = future.
 
-- **Phase 0 — Architecture** ✅ docs/, ADRs 0001–0005, CLAUDE.md + .claude rules
+- **Phase 0 — Architecture** ✅ docs/, ADRs 0001–0010, CLAUDE.md + .claude rules
 - **Phase 1 — Platform foundation** ✅ auth (sessions), org/facility, onboarding wizard, service profiles + terminology, branding/logo, users/roles/permissions (RBAC), navigation, dashboard shell, audit foundation, tenant isolation, schema push, seed
-- **Phase 2 — Patient operations** ✅ patients + search, patient 360, duplicate warnings (phone/name match at registration), appointments, queue, encounters (profile-driven forms), tasks/notifications (basic), audit
-- **Phase 3 — Billing / POS / documents** ✅ service catalogue, invoices, payments (partial/full), receipts + print profiles (A4/thermal) + reprint, POS with transactional stock deduction, report engine foundation (revenue, patient volume, pharmacy sales)
-- **Phase 4 — Pharmacy / inventory** 🚧 items, lots/batches/expiry, receive/adjust, movement ledger, low-stock alerts, barcode field, POS sales; pending: suppliers/purchase orders, transfers between facilities, expiry alerts automation
-- **Phase 5 — Workflow engine** 🚧 versioned definitions, publish lifecycle, durable runs, trigger on encounter completion; pending: visual builder (React Flow), timers/SLAs, retries, dry runs
-- **Phase 6 — Automation** 🚧 event outbox + encounter-completed trigger; pending: email/SMS/WhatsApp adapters, scheduled triggers
-- **Phase 7 — AI data agent** 🚧 tool registry, permission-before-retrieval, provenance, audit, rate limits; pending: multi-step chains, report generation actions, evaluation suite (spec §54), ACT-mode with human confirmation
-- **Phase 8 — Specialty modules** 🚧 Eye Clinic, General Practice, Dental, Diagnostic profiles with terminology + encounter forms; pending: deep specialty workflows per profile
-- **Phase 9 — Lab / Radiology / inpatient** ⬜ (lab model stub in profiles only)
-- **Phase 10 — Simulation** ⬜ (engine design required first, spec §56–60)
-- **Phase 11 — Operations command center** ⬜
-- **Phase 12 — Interoperability (FHIR mapping layer)** ⬜ (canonical model kept mappable; no proprietary lock-in)
-- **Phase 13 — Patient / staff portals** ⬜
-- **Phase 14 — Production hardening** ⬜ (security review, AI red-team, backup/restore drills, print compatibility matrix)
+- **Phase 2 — Patient operations** ✅ patients + search, patient 360, duplicate warnings, appointments, queue, encounters (profile-driven forms), tasks/notifications, audit
+- **Phase 3 — Billing / POS / documents** ✅ service catalogue, invoices, payments (partial/full, idempotent), receipts + print profiles (A4/thermal) + reprint, POS with transactional stock deduction, report engine (revenue, volume, pharmacy), payment events on outbox
+- **Phase 4 — Pharmacy / inventory** ✅ items, lots/batches/expiry, receive/adjust, movement ledger, low-stock + expiry alerts (scheduler events), barcode field, POS sales; ⬜ suppliers/purchase orders + inter-facility transfers (deferred — not in phase 5–14 range)
+- **Phase 5 — Workflow engine** ✅ versioned definitions (publish lifecycle, immutable published versions), durable runs with per-node state, 14 node types (tasks, notifications, email/SMS/WhatsApp, appointments, report/document generation, webhooks, timers/DELAY, CONDITION branches, APPROVAL gates, narrow UPDATE_RECORD), retries with backoff + dead-lettering, idempotency keys + event correlation, SLAs (node + run level), dry runs, structured visual builder (ADR 0007). Verified: task → follow-up → notify → timer → document E2E via scheduler.
+- **Phase 6 — Automation** ✅ event/outbox architecture with 10 event types, provider-neutral comms adapters (console simulation; vendor swap documented) + message log, webhook registry with HMAC signing/retry/dead-letter, scheduled triggers (interval/daily), report & document generation actions, SLA breach sweep. Acceptance: patient event → reliable multi-step workflow ✅
+- **Phase 7 — AI data agent** ✅ two-phase grounded agent, 11 tools, multi-step chains (≤3 tools), ACT-mode (LOW-risk actions with human confirmation), provenance + audit + rate limits, evaluation suite (offline deterministic + live mode: `bun tests/ai-eval.ts`), prompt-injection defenses
+- **Phase 8 — Specialty modules** ✅ 12 service profiles: Eye Clinic, General Practice, Dental, Diagnostic Centre, General Hospital + Maternity, Pediatrics, Orthopedics, ENT, Physiotherapy, Fertility, Mental Health — each with terminology, encounter form, starter catalogue
+- **Phase 9 — Lab / Radiology / inpatient** ✅ DiagnosticOrder lifecycle (order → specimen → results → verify → release) with report numbering, turnaround metrics + GeneratedDocument reports + release events; wards/beds with occupancy-locked admissions + discharge summaries; internal/external referrals
+- **Phase 10 — Simulation** ✅ seeded discrete-event engine (ADR 0008), calibration from 14-day operational aggregates, scenario builder UI (volume + per-station capacity levers), 5-seed median/p10–p90 comparison output, operational-only disclaimer (§59)
+- **Phase 11 — Operations command center** ✅ §55 metric set, z-score anomaly detection with deduped persisted alerts + acknowledge, bottleneck ranking, AI-explanation hook, scenario launcher, auto-refresh
+- **Phase 12 — Interoperability** ✅ FHIR R4 read-only mapping layer (11 resources, permission-gated, audited, ADR 0009), webhook integration, CSV import wizard (validate → preview → transactional → audit) + audited CSV exports
+- **Phase 13 — Portals** ✅ staff My Day (schedule, tasks, notifications, certifications, leave with approval) + patient portal (code-gated, read-only, rate-limited, audited — ADR 0010)
+- **Phase 14 — Production hardening** ✅ extended security probes (anon/RBAC/cross-tenant across all new surfaces), AI evaluation + red-team cases, backup/restore drill (`scripts/backup-drill.ts`), `/api/health` (DB + backlog depth), runbooks + `docs/PRODUCTION-READINESS.md`. ⬜ External pen-test, load tests, browser matrix, DPIA pack remain production gates.
 
 ## Testing note (spec §96)
-This milestone ships with lint + type discipline and browser-verified golden paths; the Vitest/Playwright suites (unit, cross-tenant security, financial integrity, AI grounding) are the next engineering step and are scaffolded under `tests/`.
+Beyond lint + type discipline: `scripts/verify-phases.sh` + `verify-final-e2e.sh` (API E2E for phases 5–13), `scripts/security-probe.ts` (401/403/404 matrix incl. new surfaces), `tests/ai-eval.ts` (offline + live AI evaluation), `scripts/backup-drill.ts` (restorability), browser-verified UI flows with screenshots.

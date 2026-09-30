@@ -7,7 +7,8 @@ import type { SessionInfo, SessionUser } from "./api";
 export type ViewName =
   | "overview" | "patients" | "patient-detail" | "appointments" | "queue" | "encounters"
   | "encounter-detail" | "billing" | "invoice-detail" | "pos" | "inventory" | "reports"
-  | "ai" | "workflows" | "audit" | "staff" | "settings" | "followups" | "onboarding";
+  | "ai" | "workflows" | "audit" | "staff" | "settings" | "followups" | "onboarding"
+  | "lab" | "wards" | "command" | "simulation" | "comms" | "data" | "myday";
 
 export interface ViewRoute {
   view: ViewName;

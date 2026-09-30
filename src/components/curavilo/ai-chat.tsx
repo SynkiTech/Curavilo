@@ -42,6 +42,7 @@ export function AIChat() {
   const [messages, setMessages] = useState<AIMessageView[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ name: string; params: Record<string, unknown>; risk: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const conversations = useQuery({
@@ -54,19 +55,32 @@ export function AIChat() {
   }, [messages]);
 
   const ask = useMutation({
-    mutationFn: (message: string) => apiSend<{ conversationId: string; answer: string; provenance: unknown; usedTool: boolean; toolName: string | null }>("POST", "/api/ai", { conversationId, message }),
+    mutationFn: (message: string) => apiSend<{ conversationId: string; answer: string; provenance: unknown; usedTool: boolean; toolName: string | null; pendingAction?: { name: string; params: Record<string, unknown>; risk: string } | null }>("POST", "/api/ai", { conversationId, message }),
     onSuccess: (res) => {
       setConversationId(res.conversationId);
       setMessages((prev) => [
         ...prev,
         { id: `a-${Date.now()}`, role: "assistant", content: res.answer, provenance: res.provenance ? JSON.stringify(res.provenance) : null },
       ]);
+      if (res.pendingAction) {
+        setPendingAction(res.pendingAction);
+      }
       queryClient.invalidateQueries({ queryKey: ["ai-conversations"] });
     },
     onError: (e) => {
       if (e instanceof ApiError && e.status === 429) setError(e.message);
       else setError((e as Error).message);
     },
+  });
+
+  const confirmAction = useMutation({
+    mutationFn: (input: { action: string; params: Record<string, unknown> }) => apiSend<{ message: string }>("POST", "/api/ai/act", input),
+    onSuccess: (res) => {
+      toast.success(res.message);
+      setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: `✅ ${res.message}`, provenance: null }]);
+      setPendingAction(null);
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   const send = (text: string) => {
@@ -92,6 +106,7 @@ export function AIChat() {
     setConversationId(null);
     setMessages([]);
     setError(null);
+    setPendingAction(null);
   };
 
   if (!user) return null;
@@ -180,6 +195,22 @@ export function AIChat() {
               {error ? (
                 <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
                   <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {error}
+                </div>
+              ) : null}
+              {pendingAction ? (
+                <div className="ml-auto max-w-[85%] rounded-lg border border-teal-300 bg-teal-50/70 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Confirm action · risk {pendingAction.risk}</p>
+                  <p className="mt-1 text-sm">
+                    The assistant proposes: <strong>{pendingAction.name.replaceAll("_", " ")}</strong>
+                  </p>
+                  <pre className="mt-1 overflow-x-auto rounded bg-white/70 p-2 text-[11px]">{JSON.stringify(pendingAction.params, null, 1)}</pre>
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" className="bg-teal-700 hover:bg-teal-800" disabled={confirmAction.isPending}
+                      onClick={() => confirmAction.mutate({ action: pendingAction.name, params: pendingAction.params })}>
+                      Confirm & execute
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setPendingAction(null)}>Dismiss</Button>
+                  </div>
                 </div>
               ) : null}
             </div>

@@ -9,6 +9,10 @@ const PREFIX: Record<string, string> = {
   SALE: "POS",
   PATIENT: "MRN",
   LAB: "LAB",
+  LABREPORT: "LAB",
+  IMAGEREPORT: "IMG",
+  REFERRAL: "REF",
+  ADMISSION: "ADM",
 };
 
 function periodFor(type: string, now: Date): string {

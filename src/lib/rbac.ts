@@ -20,6 +20,12 @@ export const PERMISSIONS = [
   "staff:read",
   "staff:manage",
   "settings:manage",
+  // Phase 5–13 additions
+  "workflows:manage",
+  "lab:operate", // order/specimen/result/verify/release diagnostics
+  "inpatient:manage", // wards, beds, admissions, discharge
+  "portals:manage", // portal tokens + leave approvals
+  "data:manage", // import/export
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -57,6 +63,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "appointments:read",
     "queue:operate",
     "encounters:read", "encounters:write",
+    "lab:operate",
+    "inpatient:manage",
     "ai:ask",
   ],
   DOCTOR: [
@@ -66,9 +74,16 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "encounters:read", "encounters:write",
     "billing:read",
     "reports:read",
+    "lab:operate",
+    "inpatient:manage",
     "ai:ask",
   ],
-  LAB: ["patients:read", "encounters:read"],
+  LAB: [
+    "patients:read",
+    "encounters:read",
+    "lab:operate",
+    "inventory:read",
+  ],
   PHARMACY: [
     "patients:read",
     "inventory:read", "inventory:write",
@@ -106,8 +121,15 @@ export const MODULE_PERMISSION: Record<string, Permission> = {
   inventory: "inventory:read",
   reports: "reports:read",
   ai: "ai:ask",
-  staff: "staff:read",
+  lab: "lab:operate",
+  wards: "inpatient:manage",
   workflows: "patients:read",
+  command: "reports:read",
+  simulation: "reports:read",
+  comms: "settings:manage",
+  data: "data:manage",
+  staff: "staff:read",
+  myday: "patients:read",
   audit: "audit:read",
   settings: "settings:manage",
 };

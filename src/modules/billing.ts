@@ -155,6 +155,19 @@ export async function recordPayment(ctx: AuthContext, invoiceId: string, input: 
       where: { id: invoiceId },
       data: { amountPaidMinor, status },
     });
+    // Transactional outbox: payment events drive workflows/webhooks (spec §70, §134)
+    await tx.outboxEvent.create({
+      data: {
+        orgId: ctx.orgId,
+        type: "PAYMENT_RECEIVED",
+        payload: JSON.stringify({
+          refId: payment.id, paymentId: payment.id, invoiceId, invoiceNumber: invoice.number,
+          patientId: invoice.patientId, facilityId: ctx.facilityId,
+          amountMinor: input.amountMinor, currency: invoice.currency, method: input.method,
+          invoiceStatus: status,
+        }),
+      },
+    });
     return { payment, invoice: updated, idempotentReplay: false };
   });
 
