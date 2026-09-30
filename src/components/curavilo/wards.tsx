@@ -1,6 +1,6 @@
 "use client";
 
-// Wards & Admissions — ward/bed board, admission + discharge, referrals (spec §137)
+// Wards & Admissions - ward/bed board, admission + discharge, referrals (spec §137)
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BedDouble, Plus, LogOut, ArrowRightLeft } from "lucide-react";
@@ -122,7 +122,7 @@ export function Wards() {
                         disabled={bed.status !== "FREE"}
                         onClick={() => { setAdmitFor(bed); setPatientMrn(""); setReason(""); }}
                         className={`rounded-lg border px-1 py-2.5 text-center text-xs font-medium transition ${BED_TONE[bed.status] ?? BED_TONE.FREE} ${bed.status === "FREE" ? "hover:ring-2 hover:ring-teal-400" : "cursor-not-allowed"}`}
-                        aria-label={`Bed ${bed.label} — ${bed.status}`}
+                        aria-label={`Bed ${bed.label} - ${bed.status}`}
                         title={bed.status === "FREE" ? `Admit into bed ${bed.label}` : `Bed ${bed.label} is ${bed.status.toLowerCase()}`}
                       >
                         {bed.label}
@@ -181,7 +181,7 @@ export function Wards() {
                   <div>
                     <p className="text-sm font-medium">{r.patient.firstName} {r.patient.lastName} <span className="text-xs text-muted-foreground">{r.patient.mrn}</span></p>
                     <p className="text-xs text-muted-foreground">
-                      {r.direction === "INTERNAL" ? `Internal → ${r.toServiceLine ?? r.toStaffMember?.name ?? "—"}` : `External → ${r.externalFacility}`} · {formatDateTime(r.createdAt)}
+                      {r.direction === "INTERNAL" ? `Internal → ${r.toServiceLine ?? r.toStaffMember?.name ?? "-"}` : `External → ${r.externalFacility}`} · {formatDateTime(r.createdAt)}
                     </p>
                     {r.notes ? <p className="mt-0.5 text-xs">{r.notes}</p> : null}
                   </div>

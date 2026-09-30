@@ -1,4 +1,4 @@
-// Inventory module — auditable movement ledger (spec §22, §23, §69)
+// Inventory module - auditable movement ledger (spec §22, §23, §69)
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";

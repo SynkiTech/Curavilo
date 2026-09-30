@@ -1,9 +1,9 @@
 "use client";
 
-// Reports — revenue, patient volume, pharmacy sales (deterministic, printable) (spec §32)
+// Reports - revenue, patient volume, pharmacy sales (deterministic, printable) (spec §32)
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Printer } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiGet, formatMoney, formatDate, formatDateTime } from "./api";
 import { LoadingState, ErrorState, PageHeader, StatCard } from "./ui-kit";
+import { PagePrintButton } from "./print";
 import { useApp } from "./store";
 
 function monthBounds(): { from: string; to: string } {
@@ -42,8 +43,8 @@ export function Reports() {
     <div className="print-area-parent">
       <PageHeader
         title="Reports"
-        subtitle="Deterministic figures computed from the ledgers — never estimated."
-        actions={<Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print</Button>}
+        subtitle="Deterministic figures computed from the ledgers - never estimated."
+        actions={<PagePrintButton />}
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3 no-print">
@@ -72,7 +73,7 @@ export function Reports() {
 
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
-      {data ? <ReportBody type={type} data={data} currency={user?.currency ?? "NGN"} timezone={user?.timezone ?? "Africa/Lagos"} period={`${formatDate(range.from)} – ${formatDate(range.to)}`} /> : null}
+      {data ? <ReportBody type={type} data={data} currency={user?.currency ?? "NGN"} timezone={user?.timezone ?? "Africa/Lagos"} period={`${formatDate(range.from)} to ${formatDate(range.to)}`} /> : null}
     </div>
   );
 }
@@ -104,7 +105,7 @@ function ReportBody({ type, data, currency, timezone, period }: { type: string; 
               {d.payments.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs">{p.number}</TableCell>
-                  <TableCell>{p.patient ?? "—"}</TableCell>
+                  <TableCell>{p.patient ?? "-"}</TableCell>
                   <TableCell>{p.method}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(p.amountMinor, currency)}</TableCell>
                 </TableRow>
@@ -150,7 +151,7 @@ function ReportBody({ type, data, currency, timezone, period }: { type: string; 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard title="Sales total" value={formatMoney(d.totalMinor, currency)} />
         <StatCard title="Transactions" value={d.salesCount} />
-        <StatCard title="Top item" value={d.topItems[0]?.name ?? "—"} hint={d.topItems[0] ? formatMoney(d.topItems[0].totalMinor, currency) : undefined} />
+        <StatCard title="Top item" value={d.topItems[0]?.name ?? "-"} hint={d.topItems[0] ? formatMoney(d.topItems[0].totalMinor, currency) : undefined} />
       </div>
       <div className="overflow-hidden rounded-lg border bg-white print-area">
         <Table>

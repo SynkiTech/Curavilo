@@ -1,4 +1,4 @@
-// Clinical module — encounters (spec §19, §15). Clinical records are versioned-safe:
+// Clinical module - encounters (spec §19, §15). Clinical records are versioned-safe:
 // completion writes once; afterwards records are archived via status, not hard-deleted.
 import { z } from "zod";
 import { db } from "@/lib/db";

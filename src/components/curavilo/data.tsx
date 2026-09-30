@@ -1,6 +1,6 @@
 "use client";
 
-// Data & Portals — CSV import/export (spec §64–65) + patient portal codes (§141)
+// Data & Portals - CSV import/export (spec §64–65) + patient portal codes (§141)
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, KeyRound, Upload } from "lucide-react";
@@ -76,7 +76,7 @@ export function DataPortals() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-1.5 text-base"><Upload className="h-4 w-4" aria-hidden /> CSV import — patients</CardTitle>
+            <CardTitle className="flex items-center gap-1.5 text-base"><Upload className="h-4 w-4" aria-hidden /> CSV import - patients</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
@@ -138,7 +138,7 @@ export function DataPortals() {
           </div>
           {issuedCode ? (
             <p className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
-              Access code (shown once): <code className="rounded bg-white px-1.5 py-0.5 font-semibold">{issuedCode}</code> — the patient opens the portal from the sign-in screen, enters their MRN + this code.
+              Access code (shown once): <code className="rounded bg-white px-1.5 py-0.5 font-semibold">{issuedCode}</code> - the patient opens the portal from the sign-in screen, enters their MRN + this code.
             </p>
           ) : null}
 
@@ -153,7 +153,7 @@ export function DataPortals() {
                   {tokens.data.tokens.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="text-sm">{t.patient.firstName} {t.patient.lastName} <span className="text-xs text-muted-foreground">{t.patient.mrn}</span></TableCell>
-                      <TableCell className="text-xs">{t.label ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{t.label ?? "-"}</TableCell>
                       <TableCell className="text-xs">{formatDate(t.expiresAt)}</TableCell>
                       <TableCell className="text-xs">{t.lastUsedAt ? formatDate(t.lastUsedAt) : "never"}</TableCell>
                       <TableCell className="text-right">

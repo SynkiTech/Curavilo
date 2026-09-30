@@ -1,6 +1,6 @@
 "use client";
 
-// Workflow builder — structured, zero-dependency visual editor for the
+// Workflow builder - structured, zero-dependency visual editor for the
 // declarative workflow engine (ADR 0007). Nodes are typed cards; the graph is
 // a linear chain with CONDITION branch targets; no free-form code is possible.
 import { useMemo, useState } from "react";
@@ -122,7 +122,7 @@ export function WorkflowBuilderDialog({
       slaMinutes: slaMinutes ? Number(slaMinutes) : null,
     }),
     onSuccess: () => {
-      toast.success(isEdit ? "Workflow updated." : "Workflow created as draft — dry-run it, then publish.");
+      toast.success(isEdit ? "Workflow updated." : "Workflow created as draft - dry-run it, then publish.");
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
       onClose();
     },
@@ -149,7 +149,7 @@ export function WorkflowBuilderDialog({
     onSuccess: (steps) => {
       setDryRunResult(steps);
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
-      toast.success("Dry-run complete — side effects were simulated only.");
+      toast.success("Dry-run complete - side effects were simulated only.");
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : (e as Error).message),
   });
@@ -272,7 +272,7 @@ export function WorkflowBuilderDialog({
                     <div className="space-y-1">
                       <Label className="text-xs">TRUE → step</Label>
                       <Select value={nodes[idx].config.trueTarget ?? ""} onValueChange={(v) => updateConfig(idx, "trueTarget", v)}>
-                        <SelectTrigger className="h-9" aria-label="True branch"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectTrigger className="h-9" aria-label="True branch"><SelectValue placeholder="-" /></SelectTrigger>
                         <SelectContent>
                           {nodes.filter((n2) => n2.id !== node.id).map((n) => <SelectItem key={n.id} value={n.id}>{nodes.indexOf(n) + 1}. {NODE_LABELS[n.type] ?? n.type}</SelectItem>)}
                           {nodes.length <= 1 ? <SelectItem value="end">End of flow</SelectItem> : null}
@@ -282,7 +282,7 @@ export function WorkflowBuilderDialog({
                     <div className="space-y-1">
                       <Label className="text-xs">FALSE → step</Label>
                       <Select value={nodes[idx].config.falseTarget ?? ""} onValueChange={(v) => updateConfig(idx, "falseTarget", v)}>
-                        <SelectTrigger className="h-9" aria-label="False branch"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectTrigger className="h-9" aria-label="False branch"><SelectValue placeholder="-" /></SelectTrigger>
                         <SelectContent>
                           {nodes.filter((n2) => n2.id !== node.id).map((n) => <SelectItem key={n.id} value={n.id}>{nodes.indexOf(n) + 1}. {NODE_LABELS[n.type] ?? n.type}</SelectItem>)}
                           {nodes.length <= 1 ? <SelectItem value="end">End of flow</SelectItem> : null}
@@ -292,7 +292,7 @@ export function WorkflowBuilderDialog({
                   </>
                 ) : null}
               </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Tip: use {"{{patientName}}"}, {"{{invoiceNumber}}"} placeholders in texts — they resolve from the trigger payload.</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Tip: use {"{{patientName}}"}, {"{{invoiceNumber}}"} placeholders in texts - they resolve from the trigger payload.</p>
             </div>
           ))}
         </div>
@@ -305,7 +305,7 @@ export function WorkflowBuilderDialog({
                 <li key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span>{s.nodeKey} · {s.type.replaceAll("_", " ")}</span>
                   <span className={s.status === "COMPLETED" ? "text-emerald-700" : s.status === "FAILED" ? "text-red-700" : "text-amber-700"}>
-                    {s.status}{s.output && s.status === "COMPLETED" ? ` — ${s.output.slice(0, 60)}` : ""}{s.error ? ` — ${s.error}` : ""}
+                    {s.status}{s.output && s.status === "COMPLETED" ? ` - ${s.output.slice(0, 60)}` : ""}{s.error ? ` - ${s.error}` : ""}
                   </span>
                 </li>
               ))}

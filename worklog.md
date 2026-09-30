@@ -91,3 +91,26 @@ Work Log:
 
 Stage Summary:
 - Phases 5–14 implemented and verified end-to-end (API + browser + security probes + eval suites). ROADMAP.md now ✅ across the board except deferred Phase 4 supplier/PO extras and external production gates (pen-test, load, DPIA).
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: Dashboard UI enhancement (sidebar color distinction, animated responsive charts, JS effects) + remove all em dashes + versatile any-paper-size print engine
+
+Work Log:
+- Em dashes: scripts/strip-emdashes.mjs replaced 201 em dashes across 87 src/ files (spaced " - " -> hyphen; lone table placeholders to "-"); user-visible date-range en dashes changed to "to" (reports period, AI provenance); prisma/seed.ts + schema.prisma cleaned; scripts/strip-emdashes-db.ts swept the live SQLite DB (14 rows: Facility names/footers, Encounter.diagnosis, WorkflowDef.definition, Notification.body, AuditEvent.summary, GeneratedDocument.title). Final grep: 0 em dashes in src/ and prisma/.
+- API: /api/dashboard now returns trends (revenueByDay, encountersByDay zero-filled 14 days UTC + revenueByMethod) via two extra scoped selects in dashboardStats.
+- Sidebar redesign (shell.tsx): dark teal-to-navy gradient sidebar vs light gradient workspace (clear color distinction), brand mark with rotating conic glow, gradient-text logo, active item = gradient pill + glowing left indicator bar, hover slide micro-interaction (curvilo-nav-item), dark glass user card, thin custom scrollbar (curvilo-scroll); header: glass blur, teal-tinted search focus ring, live clock chip, gradient avatar. Mobile sheet inherits the dark theme.
+- Overview rebuild (overview.tsx): animated hero band (curvilo-hero gradient sweep + curvilo-sheen + Live pulse + quick chips), 8 MetricCards (ui-kit.tsx) with per-metric gradient icon chips + top accent bar + staggered curvilo-rise entrances + rAF count-up numbers (useCountUp, reduced-motion aware); charts: 14-day revenue AreaChart (gradient fill), payment-mix donut PieChart (rounded segments + center total + legend), 14-day encounters BarChart (gradient bars); live queue with pulsing IN_SERVICE dot + staggered row entrances; alerts/payments cards with hover lift (curvilo-card). All ResponsiveContainer (mobile-safe); charts hidden gracefully when series empty.
+- globals.css additions: curvilo-rise (staggered entrance), curvilo-hero (animated 4-stop gradient), curvilo-sheen (light sweep), curvilo-ping (pulse ring), curvilo-card (hover lift/glow), curvilo-nav-item (slide hover), curvilo-scroll (dark thin scrollbar), curvilo-spin-slow (conic rotation); prefers-reduced-motion + print media guards for all of them.
+- Print engine rewrite (print.tsx, ADR 0004 extended): 11 paper presets (A3/A4/A5/A6/Letter/Legal/Tabloid/Executive/Thermal 58/80/112 mm) + Custom size (width x height in mm or inch), portrait/landscape (dimension swap), margin presets (0/6/12/20 mm), text scale slider 80-140% (zoom-based so page breaks stay correct), live scaled preview rendering the real DocBody at true mm geometry, @page injection per effective sheet (thermal keeps auto height), settings persisted to localStorage (curavilo.print.settings.v2) and restored across dialogs, reset button, sensible PDF filename via document.title swap on print. New PagePrintButton (gear popover + Print) gives full-page prints (Reports) the same paper-size/orientation control with its own persisted key (curavilo.pageprint.v1).
+- Fixed during dev: dev server served a stale compiled CSS chunk after globals.css edits (HMR no-op) - restarted dev server + cleared .next/dev/cache; lint react-hooks/set-state-in-effect errors in useCountUp/useClock/useToday/print hydration resolved via lazy init + rAF/timeout-deferred setState.
+
+Verification evidence:
+- bunx tsc --noEmit (src): 0 errors. bun run lint: clean.
+- Browser E2E (agent-browser): login eyeclinic@ -> dashboard renders hero, 8 animated KPI cards, revenue area + donut + volume bar charts, pulsing queue, clock; zero page/console errors; screenshots download/curavilo-dashboard-v2-top.png, -charts.png, -queue.png.
+- Print: invoice dialog shows presets + margin + scale + preview; A4 -> width 210mm/pad 6mm; Landscape -> 297mm; Custom 150x90 -> @page "size: 150mm 90mm; margin: 0"; localStorage persists; Reset works. Reports page gear popover: A4 portrait/landscape, @page "size: 210mm 297mm; margin: 8mm"; screenshots curavilo-print-dialog.png, curavilo-print-a4.png, curavilo-pageprint-popover.png.
+- Regression: landing animated background intact with hyphen-only copy; mobile (390px) reports/dashboard stack cleanly; demo logins verified after DB sweep.
+
+Stage Summary:
+- Dashboard has a distinct dark-gradient sidebar identity, animated count-up KPIs, three live responsive charts and layered JS/CSS effects (all reduced-motion + print safe); every em dash is gone from app pages and demo data; printing adapts to any paper size (11 presets + custom mm/inch, orientation, margins, text scale) with live preview and persistence. Docs/ markdown (internal engineering notes) intentionally left as-is.

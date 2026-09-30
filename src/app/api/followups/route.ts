@@ -1,4 +1,4 @@
-// Follow-ups API — list pending/overdue, complete
+// Follow-ups API - list pending/overdue, complete
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { db } from "@/lib/db";

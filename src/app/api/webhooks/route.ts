@@ -1,4 +1,4 @@
-// Webhooks API — endpoint registry + delivery log (spec §134, §140)
+// Webhooks API - endpoint registry + delivery log (spec §134, §140)
 import { z } from "zod";
 import { ok, fail, parseBody, requireAuth } from "@/lib/api";
 import { db } from "@/lib/db";

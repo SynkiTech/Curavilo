@@ -1,4 +1,4 @@
-// Money — integer minor units only (kobo for NGN). No floats, ever. (ADR 0005)
+// Money - integer minor units only (kobo for NGN). No floats, ever. (ADR 0005)
 
 export type Currency = string;
 

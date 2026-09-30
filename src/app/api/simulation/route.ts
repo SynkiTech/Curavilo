@@ -1,4 +1,4 @@
-// Simulation API — scenario builder + run (spec §56–60, §138)
+// Simulation API - scenario builder + run (spec §56–60, §138)
 import { z } from "zod";
 import { ok, fail, parseBody, requireAuth } from "@/lib/api";
 import { db } from "@/lib/db";
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       baseline: baseSummary,
       scenario: scenarioSummary,
       savedId,
-      disclaimer: "Operational estimates for planning only — not clinical predictions. Ranges reflect stochastic variation across seeds.",
+      disclaimer: "Operational estimates for planning only - not clinical predictions. Ranges reflect stochastic variation across seeds.",
     });
   } catch (error) {
     return fail(error);

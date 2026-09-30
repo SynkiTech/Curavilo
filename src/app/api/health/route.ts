@@ -1,4 +1,4 @@
-// Health probe — liveness + DB check + queue depth (runbooks, spec §142)
+// Health probe - liveness + DB check + queue depth (runbooks, spec §142)
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 

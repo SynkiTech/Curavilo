@@ -1,4 +1,4 @@
-// Document numbering — collision-safe, tenant-safe, transaction-safe (spec §38).
+// Document numbering - collision-safe, tenant-safe, transaction-safe (spec §38).
 // Format: {PREFIX}-{YYYYMMDD}-{seq6} per org per day. MRN uses period "ALL".
 import { db } from "@/lib/db";
 

@@ -1,4 +1,4 @@
-// Audit — append-only event log (spec §2.9, §86). Never store sensitive payloads.
+// Audit - append-only event log (spec §2.9, §86). Never store sensitive payloads.
 import { db } from "@/lib/db";
 
 export interface AuditInput {

@@ -1,6 +1,6 @@
 "use client";
 
-// Simulation — scenario builder + baseline comparison (spec §56–60, §138)
+// Simulation - scenario builder + baseline comparison (spec §56–60, §138)
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Play, Save, ShieldAlert } from "lucide-react";
@@ -24,7 +24,7 @@ interface ScenarioSummary {
 }
 
 function fmt(x: number | undefined): string {
-  return x === undefined ? "—" : Math.round(x * 10) / 10 >= 100 ? String(Math.round(x)) : (Math.round(x * 10) / 10).toFixed(1);
+  return x === undefined ? "-" : Math.round(x * 10) / 10 >= 100 ? String(Math.round(x)) : (Math.round(x * 10) / 10).toFixed(1);
 }
 
 export function Simulation() {
@@ -48,7 +48,7 @@ export function Simulation() {
   const run = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       apiSend<{ baseline: ScenarioSummary; scenario: ScenarioSummary | null; disclaimer: string }>("POST", "/api/simulation", payload),
-    onSuccess: (res) => toast.success("Simulation complete — estimates below."),
+    onSuccess: (res) => toast.success("Simulation complete - estimates below."),
     onError: (e) => toast.error((e as Error).message),
   });
 
@@ -80,7 +80,7 @@ export function Simulation() {
           <CardHeader className="pb-2"><CardTitle className="text-base">Scenario levers</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Patient volume — {base.baseline.arrivalsPerDay}/day → <strong>{scaledArrivals}/day</strong></Label>
+              <Label>Patient volume - {base.baseline.arrivalsPerDay}/day → <strong>{scaledArrivals}/day</strong></Label>
               <Slider value={[volumeMultiplier]} min={0.5} max={2.5} step={0.05} onValueChange={(v) => setVolumeMultiplier(v[0])} aria-label="Volume multiplier" />
               <p className="text-xs text-muted-foreground">{volumeMultiplier.toFixed(2)}× baseline</p>
             </div>
@@ -146,8 +146,8 @@ export function Simulation() {
                       <tr key={st.key} className="border-b last:border-0">
                         <td className="py-1.5">{st.label}</td>
                         <td className="py-1.5 tabular-nums">{fmt(st.avgWaitMin.median)} min</td>
-                        <td className="py-1.5 tabular-nums">{run.data!.scenario ? `${fmt(run.data!.scenario.perStation[i]?.avgWaitMin.median)} min` : "—"}</td>
-                        <td className="py-1.5 tabular-nums">{run.data!.scenario ? `${Math.round((run.data!.scenario.perStation[i]?.utilization.median ?? 0) * 100)}%` : "—"}</td>
+                        <td className="py-1.5 tabular-nums">{run.data!.scenario ? `${fmt(run.data!.scenario.perStation[i]?.avgWaitMin.median)} min` : "-"}</td>
+                        <td className="py-1.5 tabular-nums">{run.data!.scenario ? `${Math.round((run.data!.scenario.perStation[i]?.utilization.median ?? 0) * 100)}%` : "-"}</td>
                       </tr>
                     ))}
                   </tbody>

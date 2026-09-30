@@ -1,6 +1,6 @@
 "use client";
 
-// Billing — invoices, payments, receipts with print profiles (spec §20, §33–37)
+// Billing - invoices, payments, receipts with print profiles (spec §20, §33–37)
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Printer, ReceiptText } from "lucide-react";
@@ -75,7 +75,7 @@ export function Billing() {
                 {data.invoices.map((inv) => (
                   <TableRow key={inv.id} className="cursor-pointer hover:bg-stone-50" onClick={() => navigate("invoice-detail", { invoiceId: inv.id })}>
                     <TableCell className="font-mono text-xs">{inv.number}</TableCell>
-                    <TableCell className="font-medium">{inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName}` : "—"}</TableCell>
+                    <TableCell className="font-medium">{inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName}` : "-"}</TableCell>
                     <TableCell className="hidden sm:table-cell text-muted-foreground">{formatDateTime(inv.createdAt, session?.user?.timezone)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(inv.totalMinor, inv.currency)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(inv.amountPaidMinor, inv.currency)}</TableCell>
@@ -119,7 +119,7 @@ export function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
       setReceiptData({
         kind: "INVOICE",
         number: inv.number,
-        issuedTo: inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "—",
+        issuedTo: inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "-",
         dateTime: formatDateTime(inv.issuedAt ?? inv.createdAt, user.timezone),
         cashier: user.name,
         lines: (inv.items ?? []).map((i) => ({ name: i.name, quantity: i.quantity, unitPriceMinor: i.unitPriceMinor, totalMinor: i.totalMinor })),
@@ -135,7 +135,7 @@ export function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
       setReceiptData({
         kind: "RECEIPT",
         number: latest.number,
-        issuedTo: inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "—",
+        issuedTo: inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "-",
         dateTime: formatDateTime(latest.createdAt, user.timezone),
         cashier: user.name,
         lines: (inv.items ?? []).map((i) => ({ name: i.name, quantity: i.quantity, unitPriceMinor: i.unitPriceMinor, totalMinor: i.totalMinor })),
@@ -160,7 +160,7 @@ export function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
             <StatusBadge status={inv.status} />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "—"} · issued {formatDateTime(inv.issuedAt ?? inv.createdAt, user.timezone)}
+            {inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "-"} · issued {formatDateTime(inv.issuedAt ?? inv.createdAt, user.timezone)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -254,7 +254,7 @@ export function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
           setReceiptData({
             kind: "RECEIPT",
             number: payment.number,
-            issuedTo: inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "—",
+            issuedTo: inv.patient ? `${inv.patient.firstName} ${inv.patient.lastName} (${inv.patient.mrn})` : "-",
             dateTime: formatDateTime(payment.createdAt, user.timezone),
             cashier: user.name,
             lines: (inv.items ?? []).map((i) => ({ name: i.name, quantity: i.quantity, unitPriceMinor: i.unitPriceMinor, totalMinor: i.totalMinor })),
@@ -272,7 +272,7 @@ export function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Print document</DialogTitle>
-            <DialogDescription>Choose a print profile — receipts default to thermal width.</DialogDescription>
+            <DialogDescription>Choose a print profile - receipts default to thermal width.</DialogDescription>
           </DialogHeader>
           {receiptData ? (
             <DocumentRenderer

@@ -49,7 +49,7 @@ export function Workflows() {
   const run = useMutation({
     mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "RUN", workflowId, payload: {} }),
     onSuccess: () => {
-      toast.success("Workflow run completed — check runs below.");
+      toast.success("Workflow run completed - check runs below.");
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
     },
     onError: (e) => toast.error((e as Error).message),
@@ -58,7 +58,7 @@ export function Workflows() {
   const decide = useMutation({
     mutationFn: (input: { taskId: string; decision: "APPROVED" | "REJECTED" }) => apiSend("POST", "/api/workflows", { action: "RESOLVE_APPROVAL", ...input }),
     onSuccess: () => {
-      toast.success("Decision recorded — the workflow resumed.");
+      toast.success("Decision recorded - the workflow resumed.");
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
     },
     onError: (e) => toast.error((e as Error).message),
@@ -68,7 +68,7 @@ export function Workflows() {
     <div>
       <PageHeader
         title="Workflows"
-        subtitle="Durable, declarative automations — timers, conditions, approvals, retries and SLAs. Publish before they trigger on live events."
+        subtitle="Durable, declarative automations - timers, conditions, approvals, retries and SLAs. Publish before they trigger on live events."
         actions={canManage ? (
           <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" /> Build workflow
@@ -109,7 +109,7 @@ export function Workflows() {
 
           <section aria-label="Definitions" className="space-y-2">
             {data.workflows.length === 0 ? (
-              <EmptyState title="No workflows yet" hint="Build one — e.g. an outpatient flow: create task → notify → wait 24h → create follow-up." />
+              <EmptyState title="No workflows yet" hint="Build one - e.g. an outpatient flow: create task → notify → wait 24h → create follow-up." />
             ) : (
               data.workflows.map((wf) => {
                 let nodeCount = 0;
@@ -166,8 +166,8 @@ export function Workflows() {
                           <li key={i} className="flex items-center gap-2">
                             <span className={`inline-block h-1.5 w-1.5 rounded-full ${n.status === "COMPLETED" ? "bg-emerald-500" : n.status === "FAILED" ? "bg-red-500" : n.status === "PENDING" ? "bg-stone-300" : "bg-amber-400"}`} aria-hidden />
                             <span>{n.nodeKey} · {n.type.replaceAll("_", " ")} · {n.status.toLowerCase()}{n.attempts > 1 ? ` (attempt ${n.attempts})` : ""}</span>
-                            {n.output ? <span className="truncate">— {n.output.slice(0, 70)}</span> : null}
-                            {n.error ? <span className="text-red-600">— {n.error.slice(0, 60)}</span> : null}
+                            {n.output ? <span className="truncate">- {n.output.slice(0, 70)}</span> : null}
+                            {n.error ? <span className="text-red-600">- {n.error.slice(0, 60)}</span> : null}
                           </li>
                         ))}
                       </ol>
@@ -293,7 +293,7 @@ export function Staff() {
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.designation.replaceAll("_", " ")}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{s.department ?? "—"}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{s.department ?? "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -357,7 +357,7 @@ export function FollowUps() {
 
   return (
     <div>
-      <PageHeader title="Follow-ups" subtitle="Pending reviews — overdue ones are highlighted." />
+      <PageHeader title="Follow-ups" subtitle="Pending reviews - overdue ones are highlighted." />
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
       {data ? (

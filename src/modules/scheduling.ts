@@ -1,4 +1,4 @@
-// Scheduling module — appointments + queue management (spec §18)
+// Scheduling module - appointments + queue management (spec §18)
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";

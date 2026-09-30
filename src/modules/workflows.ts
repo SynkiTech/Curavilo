@@ -1,17 +1,17 @@
-// Workflow engine v2 — durable, declarative, no executable code (spec §29–31, §133).
+// Workflow engine v2 - durable, declarative, no executable code (spec §29–31, §133).
 //
 // Architecture (ADR 0006):
 // - Definitions are versioned JSON graphs; only whitelisted node types with
 //   typed configs are allowed. Arbitrary code never runs.
 // - Every node execution is persisted as a WorkflowRunNode row (durable state,
 //   attempts, idempotency key, output) so crashes resume exactly where they
-//   stopped — the DB, not setTimeout, is the source of truth.
+//   stopped - the DB, not setTimeout, is the source of truth.
 // - Transient waits (DELAY nodes, retry backoff, approvals) park the run and
 //   are woken by the durable scheduler (src/lib/scheduler.ts).
 // - Failures retry up to 3 attempts with exponential backoff, then dead-letter
 //   the node and fail the run with the error recorded.
 // - DRY-RUN executes the full graph with all side effects suppressed and every
-//   action recorded as "would …" — used by the builder before publishing.
+//   action recorded as "would …" - used by the builder before publishing.
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { AppError, NotFound } from "@/lib/api";
@@ -63,7 +63,7 @@ function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
 }
 
-/** Config requirements per node type — validated at save/publish/run time. */
+/** Config requirements per node type - validated at save/publish/run time. */
 function configIssues(node: WorkflowNode): string[] {
   const c = node.config ?? {};
   const issues: string[] = [];
@@ -491,7 +491,7 @@ export async function processRun(ctx: AuthContext, runId: string): Promise<"RUNN
           data: {
             orgId: ctx.orgId, facilityId: ctx.facilityId,
             title: interpolate(asString(node.config.title) ?? "Approval required", payload),
-            description: asString(node.config.description) ? interpolate(String(node.config.description), payload) : "Created by workflow — approve or reject to continue the run.",
+            description: asString(node.config.description) ? interpolate(String(node.config.description), payload) : "Created by workflow - approve or reject to continue the run.",
             role: asString(node.config.role) ?? null,
             priority: "HIGH",
             kind: "APPROVAL",
@@ -638,7 +638,7 @@ export async function publishWorkflow(ctx: AuthContext, workflowDefId: string) {
       publishedAt: def.status === "PUBLISHED" ? def.publishedAt : new Date(),
     },
   });
-  // Archiving a published def keeps the latest published version runnable — archive supersedes older versions.
+  // Archiving a published def keeps the latest published version runnable - archive supersedes older versions.
   if (updated.status === "PUBLISHED") {
     await db.workflowDef.updateMany({
       where: { orgId: ctx.orgId, key: def.key, status: "PUBLISHED", id: { not: def.id } },

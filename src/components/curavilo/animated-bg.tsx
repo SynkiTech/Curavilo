@@ -1,6 +1,6 @@
 "use client";
 
-// Animated ambient background — drifting gradient blobs, aurora sweep, subtle
+// Animated ambient background - drifting gradient blobs, aurora sweep, subtle
 // grid and floating healthcare glyphs. Purely decorative (aria-hidden) and it
 // respects prefers-reduced-motion (see globals.css).
 

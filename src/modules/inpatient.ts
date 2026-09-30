@@ -1,4 +1,4 @@
-// Inpatient foundation — wards, beds, admissions, discharge (spec §137).
+// Inpatient foundation - wards, beds, admissions, discharge (spec §137).
 // Bed occupancy is derived from Admission status; beds transition through the
 // admission transaction so FREE/OCCUPIED can never drift from reality.
 
@@ -54,7 +54,7 @@ export async function listWards(ctx: AuthContext) {
 export async function setBedStatus(ctx: AuthContext, bedId: string, status: "FREE" | "MAINTENANCE") {
   const bed = await db.bed.findFirst({ where: { id: bedId, orgId: ctx.orgId } });
   if (!bed) throw NotFound("Bed not found.");
-  if (bed.status === "OCCUPIED") throw new AppError(409, "invalid_state", "Bed is occupied — discharge the patient first.");
+  if (bed.status === "OCCUPIED") throw new AppError(409, "invalid_state", "Bed is occupied - discharge the patient first.");
   return db.bed.update({ where: { id: bedId }, data: { status } });
 }
 
@@ -103,7 +103,7 @@ export async function dischargePatient(ctx: AuthContext, admissionId: string, in
       data: {
         orgId: ctx.orgId, facilityId: ctx.facilityId,
         kind: "DISCHARGE_SUMMARY",
-        title: `Discharge summary — ${admission.patient.firstName} ${admission.patient.lastName}`,
+        title: `Discharge summary - ${admission.patient.firstName} ${admission.patient.lastName}`,
         contentJson: JSON.stringify({
           patient: { mrn: admission.patient.mrn, name: `${admission.patient.firstName} ${admission.patient.lastName}` },
           ward: admission.bed.ward.name, bed: admission.bed.label,

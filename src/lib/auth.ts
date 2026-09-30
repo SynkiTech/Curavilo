@@ -1,4 +1,4 @@
-// Auth — scrypt passwords + DB-backed opaque sessions (ADR 0005).
+// Auth - scrypt passwords + DB-backed opaque sessions (ADR 0005).
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";

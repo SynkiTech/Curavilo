@@ -1,4 +1,4 @@
-// Diagnostics — laboratory + radiology orders (spec §137).
+// Diagnostics - laboratory + radiology orders (spec §137).
 // State machine: ORDERED → SPECIMEN_COLLECTED → RESULT_ENTERED → VERIFIED → RELEASED
 // (or CANCELLED). Release emits LAB_RESULT_RELEASED on the outbox and generates
 // a printable lab report document. Turnaround time is computed at release.
@@ -111,7 +111,7 @@ export async function enterResults(ctx: AuthContext, id: string, input: z.infer<
   return updated;
 }
 
-/** Verification by an authorized user (doctor/owner) — release flows to the patient. */
+/** Verification by an authorized user (doctor/owner) - release flows to the patient. */
 export async function verifyOrder(ctx: AuthContext, id: string) {
   const order = await loadOrder(ctx, id);
   if (order.status !== "RESULT_ENTERED") throw new AppError(409, "invalid_state", `Order is ${order.status}; expected RESULT_ENTERED.`);
@@ -146,7 +146,7 @@ export async function releaseOrder(ctx: AuthContext, id: string) {
     data: {
       orgId: ctx.orgId, facilityId: ctx.facilityId,
       kind: "LAB_REPORT",
-      title: `${order.kind === "LAB" ? "Laboratory" : "Imaging"} report — ${order.testName}`,
+      title: `${order.kind === "LAB" ? "Laboratory" : "Imaging"} report - ${order.testName}`,
       contentJson: JSON.stringify({
         reportNumber: number,
         patient: { mrn: order.patient.mrn, name: `${order.patient.firstName} ${order.patient.lastName}` },

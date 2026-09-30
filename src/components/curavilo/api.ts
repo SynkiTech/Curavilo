@@ -74,7 +74,7 @@ export async function apiSend<T>(method: "POST" | "PATCH" | "DELETE", path: stri
 
 /**
  * Fetch the session with short retries. The dev server / preview proxy can
- * briefly drop requests (restarts, cold compiles) — a bare fetch there used to
+ * briefly drop requests (restarts, cold compiles) - a bare fetch there used to
  * surface as an unhelpful "Could not sign in". Retries smooth over those gaps.
  */
 export async function fetchSessionWithRetry(attempts = 3): Promise<SessionInfo | null> {
@@ -179,7 +179,7 @@ export function formatMoney(minor: number, currency = "NGN"): string {
 }
 
 export function formatDateTime(iso: string | null | undefined, timezone = "Africa/Lagos"): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return new Date(iso).toLocaleString("en-GB", { timeZone: timezone, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch {
@@ -188,7 +188,7 @@ export function formatDateTime(iso: string | null | undefined, timezone = "Afric
 }
 
 export function formatDate(iso: string | null | undefined, timezone = "Africa/Lagos"): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return new Date(iso).toLocaleDateString("en-GB", { timeZone: timezone, day: "2-digit", month: "short", year: "numeric" });
   } catch {
@@ -197,7 +197,7 @@ export function formatDate(iso: string | null | undefined, timezone = "Africa/La
 }
 
 export function ageFrom(dob: string | null | undefined): string {
-  if (!dob) return "—";
+  if (!dob) return "-";
   const years = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
-  return years >= 0 ? `${years}y` : "—";
+  return years >= 0 ? `${years}y` : "-";
 }

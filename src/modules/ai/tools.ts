@@ -1,4 +1,4 @@
-// AI tool registry — permission-before-retrieval, deterministic, row-limited (spec §42–46)
+// AI tool registry - permission-before-retrieval, deterministic, row-limited (spec §42–46)
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { AuthContext } from "@/lib/auth";

@@ -1,4 +1,4 @@
-// Webhook integration (spec §134, §140) — outbound event delivery with HMAC
+// Webhook integration (spec §134, §140) - outbound event delivery with HMAC
 // signatures, retry with exponential backoff, and dead-lettering. Inbound
 // custom webhooks enter the platform as outbox events (CUSTOM_WEBHOOK trigger).
 
@@ -21,7 +21,7 @@ export async function createEndpoint(ctx: { orgId: string }, input: { url: strin
       active: true,
     },
   });
-  // The raw secret is shown exactly once — callers must persist it.
+  // The raw secret is shown exactly once - callers must persist it.
   return { ...ep, secret };
 }
 

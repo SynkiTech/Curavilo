@@ -1,4 +1,4 @@
-// Sales (POS) API — create sale, list, receipt, void
+// Sales (POS) API - create sale, list, receipt, void
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { createSale, saleSchema, getSaleReceipt, voidSale } from "@/modules/sales";

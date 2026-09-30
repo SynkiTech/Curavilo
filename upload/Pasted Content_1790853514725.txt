@@ -1,0 +1,3387 @@
+# CURAVILO
+
+## Premium UI/UX Transformation, Interaction Design & Motion System
+
+### Master Frontend Experience Prompt
+
+You are now acting as the **Lead Product Designer, Senior UI/UX Designer, Interaction Designer, Motion Designer and Frontend Experience Architect** for Curavilo.
+
+You are working inside the existing Curavilo healthcare SaaS project.
+
+Do NOT rebuild the application from scratch.
+
+Do NOT throw away working business logic, routes, authentication, database architecture, role permissions, workflows or existing functionality.
+
+Your task is to **transform the existing Curavilo interface into a highly distinctive, beautiful, premium, memorable and extremely usable healthcare SaaS experience** while preserving the underlying functionality.
+
+The target is not "pretty."
+
+The target is:
+
+> **A healthcare operating platform that feels so polished, intelligent and intentionally designed that the user immediately feels they are using a serious next-generation product.**
+
+The interface should feel:
+
+* premium
+* sophisticated
+* modern
+* intelligent
+* calm
+* highly responsive
+* visually distinctive
+* operationally efficient
+* human
+* trustworthy
+* memorable
+
+It should NOT look like:
+
+* a generic hospital management system
+* a generic SaaS dashboard template
+* a generic AI dashboard
+* a fintech dashboard
+* a Stripe clone
+* a Linear clone
+* a medical WordPress theme
+* a Bootstrap admin template
+* a collection of cards on a white background
+* an "AI startup" full of glowing gradients
+
+---
+
+# 1. CORE DESIGN PHILOSOPHY
+
+Design Curavilo around this idea:
+
+> **Healthcare operations are constantly moving. Curavilo should visually communicate flow, coordination, intelligence and control.**
+
+Curavilo is about:
+
+**People → Patients → Services → Workflows → Tasks → Transactions → Data → Intelligence → Action**
+
+The UI should subtly communicate movement and flow.
+
+This should influence:
+
+* navigation
+* transitions
+* workflow visualization
+* dashboard animations
+* loading states
+* status changes
+* notifications
+* AI interactions
+* charts
+* queues
+* cards
+* icons
+* backgrounds
+
+Do not make the "flow" concept literal everywhere.
+
+Avoid repeatedly using:
+
+* chain-link symbols
+* infinity symbols
+* generic arrows everywhere
+* circuit-board graphics
+
+Instead use:
+
+* directional motion
+* flowing paths
+* subtle moving particles
+* coordinated icon motion
+* connected state transitions
+* soft spatial relationships
+* animated lines
+* dynamic progress
+* intelligent feedback
+
+---
+
+# 2. DESIGN GOAL
+
+The user should experience Curavilo as:
+
+### First impression
+
+> "This looks different."
+
+### Second impression
+
+> "This feels extremely well designed."
+
+### Third impression
+
+> "Everything responds naturally."
+
+### Fourth impression
+
+> "This software actually understands what I'm doing."
+
+The interface must combine:
+
+**Visual beauty + clarity + speed + motion + information density + usability.**
+
+Never sacrifice usability merely to create visual effects.
+
+---
+
+# 3. DESIGN PERSONALITY
+
+Curavilo's visual personality should be:
+
+**Intelligent, not futuristic**
+
+**Premium, not flashy**
+
+**Modern, not trendy**
+
+**Technical, not intimidating**
+
+**Calm, not sterile**
+
+**Animated, not chaotic**
+
+**Detailed, not cluttered**
+
+**Confident, not arrogant**
+
+**Human, not robotic**
+
+---
+
+# 4. IMPORTANT DIFFERENTIATION RULE
+
+Do NOT automatically fall into the healthcare UI stereotype:
+
+```text
+Blue
+White
+Rounded card
+Medical icon
+Shadow
+Table
+Blue button
+```
+
+That is too generic.
+
+Instead develop a distinct visual system.
+
+Use strong visual hierarchy, controlled typography, purposeful spacing, subtle depth, expressive status states and motion.
+
+The product should be recognizable even without the Curavilo logo.
+
+---
+
+# 5. COLOR DIRECTION
+
+Create a sophisticated color system.
+
+Use a neutral foundation with a distinctive healthcare-oriented accent system.
+
+Consider:
+
+* warm off-white / soft neutral backgrounds
+* deep graphite
+* rich dark surfaces
+* deep teal or blue-green
+* fresh mint
+* muted aqua
+* controlled amber
+* restrained coral/red for warnings
+* subtle lavender only where useful
+
+Do NOT use:
+
+* purple-blue SaaS gradients everywhere
+* neon green
+* cyberpunk palettes
+* excessive glassmorphism
+* rainbow dashboards
+* huge colorful gradients behind every card
+
+Gradients may exist as **rare environmental accents**, but they must not become the visual identity of every component.
+
+---
+
+# 6. TYPOGRAPHY
+
+Use an excellent modern type system.
+
+Prioritize:
+
+* readability
+* hierarchy
+* compact operational density
+* excellent numeric legibility
+* clear labels
+* strong dashboard headings
+
+Create a scale for:
+
+* display
+* page title
+* section title
+* card title
+* body
+* metadata
+* labels
+* tiny supporting text
+
+Numerical values like:
+
+```text
+₦2,480,000
+1,842
+38 min
+94%
+```
+
+should feel visually important.
+
+Use tabular/monospaced numeric styling where appropriate for analytics, transactions and operational metrics.
+
+---
+
+# 7. SPACING
+
+Create a consistent spacing system.
+
+Do not randomly choose padding values per component.
+
+Use a structured spacing scale.
+
+The product should feel:
+
+* breathable
+* organized
+* dense where data matters
+* spacious where decisions matter
+
+---
+
+# 8. BORDER RADIUS
+
+Do not make every element extremely rounded.
+
+Use a controlled radius hierarchy.
+
+For example:
+
+* small controls: subtle radius
+* cards: moderate radius
+* dialogs: larger radius
+* prominent interactive surfaces: slightly stronger radius
+
+Avoid the "everything is a pill" aesthetic.
+
+---
+
+# 9. DEPTH AND SHADOW
+
+Use depth intentionally.
+
+Prefer:
+
+* subtle borders
+* soft shadows
+* layered surfaces
+* elevation changes during interaction
+
+Avoid:
+
+* heavy drop shadows
+* floating-everything
+* overblown glass cards
+* fake 3D UI
+
+---
+
+# 10. ICON SYSTEM
+
+Use a consistent icon family.
+
+Lucide or another high-quality SVG icon system is preferred.
+
+However, do not treat icons as static decorations.
+
+Create animated icon states.
+
+Examples:
+
+### Notification bell
+
+Subtle ring animation when a new notification arrives.
+
+### Search icon
+
+Small focus interaction.
+
+### Workflow icon
+
+Animated path/flow indicator.
+
+### Pharmacy
+
+Bottle/medicine-inspired icon with subtle pulse.
+
+### Queue
+
+Animated dots/position movement.
+
+### AI
+
+Use an abstract intelligence indicator, not a robot head.
+
+### Print
+
+Subtle paper/feed animation when print starts.
+
+### Sync
+
+Rotational/synchronization animation.
+
+### Success
+
+Checkmark draw animation.
+
+### Warning
+
+Soft pulse.
+
+### Error
+
+Controlled shake.
+
+The animations must communicate meaning.
+
+---
+
+# 11. MOTION SYSTEM
+
+Create a **global Curavilo Motion System**.
+
+Use JavaScript-driven motion, preferably:
+
+* Motion for React / Framer Motion
+* CSS transitions for simple state changes
+* requestAnimationFrame for lightweight custom animation when appropriate
+* SVG animation
+* IntersectionObserver where useful
+
+GSAP may be used selectively for complex orchestrated scenes if needed.
+
+Do not introduce multiple animation libraries unnecessarily.
+
+---
+
+# 12. MOTION PRINCIPLES
+
+Every animation should have a purpose.
+
+Animation may communicate:
+
+* entering
+* leaving
+* changing
+* loading
+* success
+* failure
+* progress
+* hierarchy
+* focus
+* relationships
+* system activity
+
+Do not animate simply because the capability exists.
+
+---
+
+# 13. PAGE TRANSITIONS
+
+Add polished page-level transitions.
+
+For example:
+
+```text
+Current page
+     ↓
+content soft exit
+     ↓
+new page spatially enters
+     ↓
+primary content appears
+     ↓
+secondary elements settle
+```
+
+Use subtle movement and opacity.
+
+Avoid slow cinematic transitions.
+
+Navigation should still feel fast.
+
+Target transitions generally around approximately:
+
+* 150-250ms for micro-interactions
+* 200-400ms for content transitions
+* longer only for special moments
+
+Adjust based on visual testing.
+
+---
+
+# 14. DASHBOARD ENTRANCE
+
+When a dashboard loads:
+
+Do NOT instantly render every card.
+
+Create a subtle orchestration.
+
+Example:
+
+```text
+Page shell appears
+        ↓
+Greeting/title
+        ↓
+KPI metrics
+        ↓
+Operational panels
+        ↓
+charts
+        ↓
+alerts
+```
+
+Use slight staggered motion.
+
+Keep the total perceived delay extremely small.
+
+Never intentionally slow the application just to show animation.
+
+---
+
+# 15. BUTTON INTERACTIONS
+
+Buttons should feel alive.
+
+Add:
+
+### Hover
+
+* slight elevation
+* subtle background shift
+* icon translation where appropriate
+
+### Press
+
+* tiny scale compression
+* subtle depth change
+
+### Success
+
+* icon morph/confirmation
+* subtle glow or highlight
+
+### Loading
+
+* preserve button dimensions
+* show intelligent loading indicator
+* prevent duplicate clicks
+
+Example:
+
+```text
+[ Save Workflow ]
+
+Click
+
+[ spinner  Saving... ]
+
+Success
+
+[ ✓ Workflow Saved ]
+```
+
+Then return gracefully to the normal state.
+
+---
+
+# 16. PRIMARY CTA
+
+Primary actions should feel especially polished.
+
+Examples:
+
+* Create Patient
+* Add Staff
+* Create Workflow
+* Generate Report
+* Process Payment
+* Run Simulation
+* Ask Curavilo AI
+
+Use subtle animated feedback without becoming distracting.
+
+---
+
+# 17. HOVER MICROINTERACTIONS
+
+Cards should respond subtly when interactive.
+
+Examples:
+
+```text
+Card
+ → slight elevation
+ → border emphasis
+ → internal icon movement
+ → supporting metadata becomes more visible
+```
+
+Do not make entire dashboards bounce.
+
+---
+
+# 18. ANIMATED BACKGROUNDS
+
+Use subtle JavaScript-driven backgrounds in selected areas.
+
+Do not animate the entire application continuously.
+
+Good candidates:
+
+### Login pages
+
+Use an elegant abstract "healthcare flow" environment.
+
+For example:
+
+* slow flowing lines
+* tiny moving nodes
+* subtle particles
+* soft coordinate paths
+* gently moving data points
+
+Avoid:
+
+* hospital photos
+* medical cross symbols everywhere
+* DNA helixes
+* brains
+* robots
+* futuristic cityscapes
+* excessive particles
+
+### AI page
+
+Create a subtle intelligent animated field.
+
+Concept:
+
+```text
+small points
+   ↓
+quiet movement
+   ↓
+occasional connections
+   ↓
+response activity
+```
+
+### Simulation page
+
+Use dynamic background visualization suggesting:
+
+* systems
+* flow
+* capacity
+* movement
+* scenarios
+
+### Workflow builder
+
+Use animated flow paths behind/around nodes where appropriate.
+
+---
+
+# 19. DO NOT OVERUSE BACKGROUND ANIMATION
+
+Background animation must never:
+
+* compete with text
+* reduce accessibility
+* reduce performance
+* interfere with tables
+* make the interface feel childish
+* continue aggressively while user is working
+
+Provide reduced-motion behavior.
+
+Respect:
+
+```text
+prefers-reduced-motion
+```
+
+---
+
+# 20. SIDEBAR EXPERIENCE
+
+Create a premium navigation experience.
+
+The sidebar should support:
+
+* expandable/collapsible mode
+* active state animation
+* icon motion
+* section grouping
+* unread indicators
+* role-aware navigation
+* service-profile-aware navigation
+
+When collapsing:
+
+```text
+label disappears
+icon remains
+tooltip appears
+```
+
+Animate this elegantly.
+
+---
+
+# 21. ROLE-SPECIFIC UI
+
+The dashboard must change visually and functionally according to the authenticated role.
+
+Owner:
+
+```text
+Command Center
+```
+
+Doctor:
+
+```text
+Clinical Workspace
+```
+
+Nurse:
+
+```text
+Patient Care Workspace
+```
+
+Receptionist:
+
+```text
+Front Desk Operations
+```
+
+Pharmacist:
+
+```text
+Pharmacy Operations
+```
+
+Lab:
+
+```text
+Laboratory Workspace
+```
+
+Optometrist:
+
+```text
+Eye Care Workspace
+```
+
+Optician:
+
+```text
+Optical Operations
+```
+
+These shouldn't feel like unrelated products.
+
+They should be different views of the same design system.
+
+---
+
+# 22. OWNER DASHBOARD
+
+Create a strong executive command-center experience.
+
+Sections:
+
+### Greeting
+
+Example:
+
+> Good morning, Dr. Ade.
+
+### Facility health
+
+Animated KPI metrics:
+
+* patient volume
+* waiting
+* consultations
+* revenue
+* inventory alerts
+* overdue follow-ups
+
+### Operational flow
+
+Show an animated flow representation:
+
+```text
+Registration
+   ↓
+Triage
+   ↓
+Consultation
+   ↓
+Lab / Pharmacy
+   ↓
+Completion
+```
+
+Each stage can indicate:
+
+* current volume
+* status
+* bottleneck
+* average time
+
+### Alerts
+
+Make alerts visually intelligent.
+
+Don't merely show red boxes.
+
+Use severity and motion appropriately.
+
+---
+
+# 23. DOCTOR DASHBOARD
+
+Prioritize speed.
+
+Show:
+
+* today's appointments
+* waiting patients
+* active encounters
+* pending results
+* follow-ups
+* tasks
+* recent patient activity
+* relevant AI assistant
+
+Animate:
+
+* patient arrival
+* queue updates
+* result availability
+* task completion
+
+A doctor should be able to scan this dashboard in seconds.
+
+---
+
+# 24. RECEPTION DASHBOARD
+
+Focus heavily on operational speed.
+
+Create:
+
+* quick patient search
+* register patient
+* today's appointments
+* queue
+* check-ins
+* pending actions
+
+Support keyboard shortcuts.
+
+The interface should reward fast repetitive work instead of forcing users through animations.
+
+---
+
+# 25. PHARMACY DASHBOARD
+
+Visually emphasize:
+
+* prescriptions
+* dispensing
+* low stock
+* expiry
+* sales
+* POS
+* pending tasks
+
+Inventory changes should animate subtly.
+
+Example:
+
+```text
+Stock 15
+↓
+Sale
+↓
+Stock 14
+```
+
+Don't overdo it.
+
+---
+
+# 26. EYE CLINIC UI
+
+The eye clinic profile should feel contextually appropriate.
+
+Use specialty-specific:
+
+* terminology
+* icons
+* forms
+* dashboard widgets
+* workflow states
+* measurements
+* patient views
+
+Example:
+
+```text
+Visual Acuity
+IOP
+Refraction
+Eye Examination
+Prescription
+Follow-up
+```
+
+These should visually feel like part of Curavilo, not a separate app.
+
+---
+
+# 27. PATIENT 360 EXPERIENCE
+
+This should be one of the most polished screens in the application.
+
+Create a rich patient header.
+
+Example:
+
+```text
+[Avatar]
+
+John Adeyemi
+MRN-2026-00421
+
+Age 43
+Male
+Eye Clinic
+
+[ New Encounter ]
+[ Appointment ]
+[ Ask AI ]
+```
+
+Then use a timeline-style patient history.
+
+Example:
+
+```text
+TODAY
+● Eye Examination
+│
+├─ Visual Acuity
+├─ IOP
+├─ Diagnosis
+└─ Prescription
+
+7 DAYS AGO
+● Appointment
+
+24 DAYS AGO
+● Laboratory
+```
+
+Timeline entries should animate as the user scrolls.
+
+Do not make the animation slow.
+
+---
+
+# 28. PATIENT TIMELINE ANIMATION
+
+Use:
+
+* subtle node appearance
+* connecting line draw
+* hover emphasis
+* detail expansion
+* contextual icon animation
+
+The result should feel like the patient's journey through the facility.
+
+---
+
+# 29. WORKFLOW BUILDER
+
+This should be visually impressive.
+
+Make the workflow builder feel like one of Curavilo's signature interfaces.
+
+Use:
+
+* animated edges
+* beautifully styled nodes
+* subtle grid
+* smooth zoom/pan
+* node hover
+* node selection
+* animated execution
+* condition branching
+* status indicators
+
+Example running workflow:
+
+```text
+Registration
+    ●
+    │
+    │ animated flow
+    ↓
+Triage
+    ●
+    │
+    ↓
+Doctor
+    ●
+```
+
+When a workflow is executing:
+
+* active node pulses subtly
+* path animates
+* completed nodes settle into success state
+* waiting node displays activity
+* failed node shows controlled error state
+
+---
+
+# 30. WORKFLOW NODE DESIGN
+
+Each node should communicate:
+
+* type
+* title
+* responsible role
+* state
+* status
+* action
+
+Avoid oversized cards.
+
+Use a clear visual grammar.
+
+---
+
+# 31. AI ASSISTANT EXPERIENCE
+
+The Curavilo AI interface must feel distinctive.
+
+Do NOT build a generic ChatGPT clone.
+
+Create an experience centered on:
+
+**Question → Data retrieval → Verified answer → Evidence → Action**
+
+Example:
+
+```text
+Ask Curavilo
+
+"How many patients were seen yesterday?"
+```
+
+Then display:
+
+```text
+1,248 patient encounters
+
+Yesterday
+September 30, 2026
+
+Based on:
+1,248 completed encounters
+
+[View supporting records]
+```
+
+Animate the answer intelligently:
+
+* query state
+* data retrieval state
+* result appearance
+* chart construction
+* source panel expansion
+
+---
+
+# 32. AI THINKING STATE
+
+Do not fake elaborate "thinking" animations.
+
+Instead show useful operational states:
+
+```text
+Searching authorized records...
+Analyzing results...
+Calculating...
+Preparing answer...
+```
+
+The state should reflect actual backend/tool activity where possible.
+
+Never claim the system is doing something it is not doing.
+
+---
+
+# 33. AI ANSWERS
+
+Important numbers should animate subtly.
+
+Example:
+
+```text
+0
+↓
+238
+```
+
+But do not animate for every trivial number.
+
+Large analytical answers can reveal progressively:
+
+1. headline
+2. supporting explanation
+3. chart
+4. evidence/source
+
+---
+
+# 34. AI SOURCE / PROVENANCE PANEL
+
+Create a beautiful expandable evidence drawer.
+
+Example:
+
+```text
+Answer
+
+1,284 patient visits
+
+Sources
+──────────────
+Patient Encounters
+Aug 1 - Aug 31
+1,284 records
+
+[View Records]
+```
+
+Use smooth expansion.
+
+---
+
+# 35. AI ACTION UI
+
+When the AI wants to execute an action:
+
+```text
+Curavilo AI
+
+I found 23 overdue follow-ups.
+
+I can create 23 tasks for the outpatient desk.
+
+Affected records:
+23
+
+[Review]
+[Approve]
+[Cancel]
+```
+
+Make the approval state visually obvious.
+
+Never make destructive or high-impact AI actions happen invisibly.
+
+---
+
+# 36. SIMULATION EXPERIENCE
+
+Simulation should feel visually different from normal reporting.
+
+Create an immersive operational sandbox.
+
+Example:
+
+```text
+CURRENT STATE
+
+100 patients
+3 doctors
+4 nurses
+2 rooms
+
+Scenario
+
++30% patient volume
++1 doctor
+```
+
+Then animate:
+
+```text
+Run Simulation
+       ↓
+model initializes
+       ↓
+patient flow begins
+       ↓
+queues form
+       ↓
+resources respond
+       ↓
+results stabilize
+```
+
+Do not make it a gimmicky game.
+
+It must remain an analytical tool.
+
+---
+
+# 37. SIMULATION VISUALIZATION
+
+Show:
+
+* patient flow
+* queue growth
+* resource usage
+* bottlenecks
+* utilization
+* capacity
+
+Use animated charts and flow diagrams.
+
+Allow users to compare:
+
+```text
+Current
+vs
+Scenario A
+vs
+Scenario B
+```
+
+---
+
+# 38. ANALYTICS
+
+Charts should animate when entering the viewport.
+
+Examples:
+
+* line draws
+* bars grow
+* counters settle
+* pie/donut segments reveal
+
+Use restrained animation.
+
+Provide a static/reduced-motion mode.
+
+---
+
+# 39. KPI COUNTERS
+
+For major metrics use subtle count-up animation.
+
+Example:
+
+```text
+Revenue
+₦0
+→ ₦2,480,000
+```
+
+Only when contextually appropriate.
+
+Do not make users watch every number count from zero every time they revisit a dashboard.
+
+Cache or disable repeated animations intelligently.
+
+---
+
+# 40. TABLE DESIGN
+
+Tables must remain highly usable.
+
+Use:
+
+* sticky headers
+* thoughtful column widths
+* hover states
+* row actions
+* status indicators
+* pagination
+* filters
+* search
+* sorting
+* bulk selection where appropriate
+
+Rows may subtly highlight on:
+
+* hover
+* update
+* newly created record
+* status change
+
+Do not animate entire tables aggressively.
+
+---
+
+# 41. SEARCH EXPERIENCE
+
+Make search feel extremely polished.
+
+Create:
+
+```text
+⌘K / Ctrl+K
+```
+
+style command/search interface where practical.
+
+Search should support:
+
+* patient
+* staff
+* appointments
+* invoices
+* receipts
+* drugs
+* inventory
+* workflows
+* reports
+
+Results appear with subtle grouped animations.
+
+---
+
+# 42. COMMAND PALETTE
+
+Create a premium global command system.
+
+Possible actions:
+
+```text
+Create Patient
+Schedule Appointment
+Open Queue
+Create Workflow
+Generate Report
+Open POS
+Ask AI
+Run Simulation
+Open Staff
+Print Latest Receipt
+```
+
+Respect permissions.
+
+Animate the command palette elegantly.
+
+---
+
+# 43. TOASTS
+
+Create high-quality toast notifications.
+
+Examples:
+
+```text
+✓ Patient registered
+✓ Payment received
+✓ Workflow published
+✓ Receipt generated
+✓ Report ready
+⚠ Stock below reorder level
+✕ Payment failed
+```
+
+Use icon animation.
+
+Allow undo where the underlying action is safely reversible.
+
+Don't build fake undo buttons.
+
+---
+
+# 44. LOADING STATES
+
+Do NOT use generic spinning circles everywhere.
+
+Create contextual loading states.
+
+Examples:
+
+Patient search:
+
+```text
+Searching patients...
+```
+
+Report:
+
+```text
+Preparing report...
+```
+
+AI:
+
+```text
+Querying authorized records...
+```
+
+Workflow:
+
+```text
+Loading workflow...
+```
+
+Printing:
+
+```text
+Preparing document...
+```
+
+Use skeletons for larger page structures.
+
+---
+
+# 45. SKELETON LOADING
+
+Skeletons should resemble the final content.
+
+Animate subtly.
+
+Avoid bright shimmering effects across the whole page.
+
+Use directional movement rather than intense shimmer.
+
+---
+
+# 46. EMPTY STATES
+
+Every major module needs thoughtful empty states.
+
+Example:
+
+```text
+No appointments yet.
+
+Your schedule for today is empty.
+
+[Create Appointment]
+```
+
+For inventory:
+
+```text
+No inventory items yet.
+
+Add your first stock item to begin tracking hospital inventory.
+
+[Add Item]
+```
+
+For AI:
+
+```text
+Ask Curavilo anything about your authorized hospital data.
+```
+
+Use subtle illustration/icon motion where appropriate.
+
+---
+
+# 47. ERROR STATES
+
+Errors should be visually calm.
+
+Example:
+
+```text
+Something went wrong.
+
+We couldn't load today's appointments.
+
+[Try Again]
+```
+
+Use subtle icon animation.
+
+Avoid dramatic red screens.
+
+---
+
+# 48. SUCCESS STATES
+
+Create satisfying but professional success moments.
+
+Examples:
+
+* patient created
+* payment received
+* workflow published
+* report generated
+* staff invited
+* receipt printed
+
+Use:
+
+* checkmark draw
+* small burst
+* subtle ring
+* controlled motion
+
+No confetti unless a rare major milestone genuinely deserves it.
+
+---
+
+# 49. FORM UX
+
+Forms are critical in healthcare software.
+
+Use:
+
+* intelligent field grouping
+* inline validation
+* clear labels
+* help text
+* keyboard navigation
+* focused states
+* validation transitions
+* autosave where appropriate
+* unsaved-change warnings
+
+Do not make errors appear only after submission.
+
+---
+
+# 50. MULTI-STEP ONBOARDING
+
+Make facility registration beautiful.
+
+Step indicator:
+
+```text
+1 Facility
+2 Services
+3 Branding
+4 Departments
+5 Staff
+6 Finish
+```
+
+Use animated transitions between steps.
+
+Show progress.
+
+Preserve entered values.
+
+Allow going backward without losing data.
+
+---
+
+# 51. LOGO UPLOAD
+
+Create a polished logo upload experience.
+
+Support:
+
+* drag/drop
+* file picker
+* preview
+* replace
+* remove
+* recommended dimensions
+* validation
+
+Show how the logo will appear on:
+
+* report
+* invoice
+* receipt
+* POS
+
+This is a strong UX opportunity.
+
+---
+
+# 52. PRINT PREVIEW EXPERIENCE
+
+Create a premium document preview.
+
+User should be able to select:
+
+```text
+Document
+Paper
+Orientation
+Template
+```
+
+Show:
+
+* live preview
+* hospital logo
+* document data
+* margins
+* thermal layout where applicable
+
+Buttons:
+
+```text
+Print
+Download PDF
+Close
+```
+
+Make changing paper profiles visibly update the preview.
+
+---
+
+# 53. THERMAL RECEIPT PREVIEW
+
+Allow users to preview:
+
+```text
+58mm
+80mm
+```
+
+before printing.
+
+The layout should actually adapt.
+
+Do not simply scale the A4 version down.
+
+---
+
+# 54. RESPONSIVE DESIGN
+
+Design for:
+
+* desktop
+* laptop
+* tablet
+* mobile
+
+The main staff workstation experience should remain optimized for larger screens.
+
+Mobile versions should prioritize:
+
+* tasks
+* appointments
+* patient lookup
+* notifications
+* quick actions
+* selected dashboards
+
+Do not force massive clinical tables into tiny screens.
+
+---
+
+# 55. MOBILE NAVIGATION
+
+Create a polished mobile navigation pattern.
+
+Possible:
+
+* bottom navigation for primary actions
+* drawer for additional modules
+* floating quick action
+
+But don't blindly use mobile patterns if they hurt productivity.
+
+---
+
+# 56. MICROINTERACTIONS
+
+Create a reusable interaction library.
+
+Examples:
+
+```text
+button press
+toggle
+checkbox
+radio
+dropdown
+popover
+modal
+drawer
+tab
+badge
+status change
+progress
+upload
+delete
+save
+print
+download
+copy
+search
+filter
+sort
+expand
+collapse
+```
+
+All should have coherent motion behavior.
+
+---
+
+# 57. DELETE / DANGEROUS ACTION UX
+
+Do not rely on simple "Are you sure?" dialogs.
+
+For dangerous actions:
+
+* clearly describe consequence
+* display affected records
+* require explicit confirmation
+* require typed confirmation for especially destructive actions where appropriate
+
+Use motion to emphasize state change without being dramatic.
+
+---
+
+# 58. NOTIFICATION CENTER
+
+Create a rich notification center.
+
+Categories:
+
+* system
+* workflow
+* patient
+* appointment
+* pharmacy
+* inventory
+* finance
+* AI
+* security
+
+Unread notifications should have subtle motion.
+
+Do not flash constantly.
+
+---
+
+# 59. REAL-TIME UI
+
+Where real-time events already exist or are appropriate, animate updates intelligently.
+
+Example:
+
+New patient enters queue.
+
+Instead of refreshing the table:
+
+```text
+new row appears
+↓
+subtle highlight
+↓
+settles into position
+```
+
+For status change:
+
+```text
+Waiting
+↓
+In Consultation
+```
+
+Use a clear transition.
+
+---
+
+# 60. LIVE QUEUE
+
+The queue interface should feel alive.
+
+Show:
+
+* patient count
+* current patient
+* waiting time
+* priority
+* room/doctor
+* status
+
+Waiting times may update without visually distracting the user.
+
+---
+
+# 61. PATIENT FLOW VISUALIZATION
+
+On owner/operations dashboards, create a visual patient-flow component.
+
+Example:
+
+```text
+Registration
+   32
+    ↓
+Triage
+   18
+    ↓
+Consultation
+   11
+    ↓
+Lab
+    7
+    ↓
+Pharmacy
+    5
+```
+
+Use subtle flowing motion to indicate movement.
+
+This can become a recognizable Curavilo visual pattern.
+
+---
+
+# 62. STATUS DESIGN
+
+Create a semantic status system.
+
+Examples:
+
+### Neutral
+
+draft
+scheduled
+pending
+
+### Active
+
+in progress
+waiting
+processing
+
+### Positive
+
+completed
+paid
+verified
+
+### Warning
+
+delayed
+low stock
+expiring
+
+### Critical
+
+failed
+overdue
+blocked
+
+Each status should have:
+
+* icon
+* label
+* color
+* motion behavior where relevant
+
+Do not communicate meaning through color alone.
+
+---
+
+# 63. AI / SYSTEM ACTIVITY INDICATOR
+
+Create a reusable animated activity indicator for:
+
+* AI
+* syncing
+* printing
+* generating
+* processing
+* simulation
+
+It should visually communicate:
+
+```text
+Idle
+Processing
+Success
+Error
+```
+
+---
+
+# 64. BACKGROUND SYSTEM
+
+Implement a subtle reusable animated background system.
+
+Possible modes:
+
+```text
+default
+AI
+simulation
+workflow
+login
+```
+
+The background should respond to page purpose.
+
+Do not render expensive particle systems globally.
+
+Pause background animations when the page is not visible if appropriate.
+
+---
+
+# 65. PERFORMANCE REQUIREMENT
+
+Animation must not destroy application performance.
+
+Target:
+
+* smooth 60fps where practical
+* minimal main-thread work
+* GPU-friendly transforms
+* avoid layout thrashing
+* avoid huge DOM particle counts
+* avoid continuous JS loops when CSS/SVG is sufficient
+
+Use:
+
+* transform
+* opacity
+* SVG transforms
+* requestAnimationFrame carefully
+
+Avoid animating:
+
+* width
+* height
+* top
+* left
+
+when transforms can achieve the same effect.
+
+Use IntersectionObserver to start effects only when visible where appropriate.
+
+---
+
+# 66. REDUCED MOTION
+
+Respect:
+
+```text
+prefers-reduced-motion: reduce
+```
+
+When reduced motion is active:
+
+* remove non-essential movement
+* keep functional transitions instantaneous or very short
+* retain status communication through color/icon/text
+* never hide functionality
+
+---
+
+# 67. ACCESSIBILITY
+
+Do not sacrifice accessibility for aesthetics.
+
+Ensure:
+
+* semantic HTML
+* keyboard navigation
+* focus states
+* screen reader support
+* accessible dialogs
+* accessible dropdowns
+* accessible tooltips
+* accessible tables
+* sufficient contrast
+* accessible status messages
+* reduced motion support
+
+Every interaction must work without animation.
+
+---
+
+# 68. DARK MODE
+
+Create a polished dark mode.
+
+Do not simply invert colors.
+
+Design dark mode intentionally.
+
+Use:
+
+* deep layered surfaces
+* controlled contrast
+* subtle borders
+* restrained accent colors
+* clear hierarchy
+
+Animated effects should remain subtle and readable in dark mode.
+
+---
+
+# 69. LIGHT MODE
+
+Light mode should be the default unless the existing product direction dictates otherwise.
+
+It should feel premium rather than sterile.
+
+Use tonal layering instead of endless white cards.
+
+---
+
+# 70. SURFACE HIERARCHY
+
+Create:
+
+```text
+App background
+↓
+Navigation
+↓
+Primary surface
+↓
+Secondary surface
+↓
+Card
+↓
+Interactive card
+↓
+Modal
+```
+
+The user should understand depth without heavy shadows.
+
+---
+
+# 71. MODALS / DRAWERS
+
+Use motion for entering and leaving.
+
+Examples:
+
+* modal scales/slides subtly
+* drawer enters from edge
+* overlay fades
+
+Keep interaction fast.
+
+Do not make every modal a dramatic cinematic animation.
+
+---
+
+# 72. TOOLTIP DESIGN
+
+Tooltips should:
+
+* appear quickly
+* explain unfamiliar icons
+* not restate obvious labels
+* follow accessibility best practices
+
+Use slight motion.
+
+---
+
+# 73. DATA VISUALIZATION DESIGN
+
+Do not make charts look like generic analytics templates.
+
+Create Curavilo-specific chart styling.
+
+Use:
+
+* clear axes
+* contextual annotations
+* subtle gradients only where useful
+* animated entry
+* interactive hover
+* data point highlighting
+* useful tooltips
+
+Do not prioritize decoration over insight.
+
+---
+
+# 74. REPORTS
+
+The reports interface should feel like a professional analytics workspace.
+
+Include:
+
+```text
+Filters
+Date
+Department
+Service
+Staff
+Patient
+Status
+
+Generate
+```
+
+Then:
+
+```text
+Summary
+Charts
+Detailed table
+```
+
+Animated only where helpful.
+
+---
+
+# 75. PHARMACY / POS EXPERIENCE
+
+The POS should prioritize speed and clarity.
+
+Use:
+
+* large product search
+* barcode workflow
+* cart
+* totals
+* payment method
+* receipt preview
+* transaction confirmation
+
+Add small motion to:
+
+* item added
+* quantity changed
+* payment success
+* stock update
+
+Never let animations delay transaction completion.
+
+---
+
+# 76. INVENTORY VISUALIZATION
+
+Use visual indicators for:
+
+* stock level
+* reorder level
+* expiry
+* movement
+* stock health
+
+Example:
+
+```text
+Stock Health
+████████░░ 82%
+```
+
+Animate the indicator only during important changes.
+
+---
+
+# 77. STAFF MANAGEMENT EXPERIENCE
+
+Make staff management feel more like a professional team operating console.
+
+Use:
+
+* avatars
+* role badges
+* department labels
+* status indicators
+* last activity
+* access level
+* assigned service
+
+Staff cards can have subtle hover depth.
+
+---
+
+# 78. ROLE CONFIGURATION EXPERIENCE
+
+The permissions editor should make access understandable.
+
+Use categories:
+
+```text
+Patients
+Clinical
+Billing
+Pharmacy
+Inventory
+Reports
+AI
+Workflows
+Settings
+```
+
+Show:
+
+```text
+View
+Create
+Edit
+Delete
+Export
+Approve
+```
+
+Use animated toggles.
+
+Clearly differentiate:
+
+* inherited permissions
+* custom overrides
+* owner-only permissions
+
+---
+
+# 79. SERVICE PROFILE EXPERIENCE
+
+Facility administrators should be able to configure:
+
+```text
+Facility Type
+Services
+Departments
+Terminology
+Modules
+Forms
+Workflows
+```
+
+Make the setup visually modular.
+
+Use preview cards.
+
+Example:
+
+```text
+Eye Clinic
+
+✓ Ophthalmology
+✓ Optometry
+✓ Optical
+✓ Pharmacy
+```
+
+---
+
+# 80. PERSONALIZATION
+
+Allow controlled personalization of:
+
+* dashboard widgets
+* widget order
+* favorite shortcuts
+* density where appropriate
+
+Do not allow users to customize themselves into unauthorized capabilities.
+
+---
+
+# 81. MOTION TOKEN SYSTEM
+
+Create reusable motion tokens.
+
+Example conceptual system:
+
+```text
+motion.instant
+motion.fast
+motion.normal
+motion.slow
+
+easing.standard
+easing.enter
+easing.exit
+easing.spring
+```
+
+Use these consistently.
+
+Do not hard-code random animation durations everywhere.
+
+---
+
+# 82. COMPONENT VARIANTS
+
+Create reusable components such as:
+
+```text
+AnimatedButton
+AnimatedIcon
+StatusBadge
+KPIValue
+MetricCard
+AnimatedCard
+PageTransition
+SectionReveal
+AnimatedTableRow
+LoadingSkeleton
+EmptyState
+ErrorState
+CommandPalette
+AIAssistant
+DataSourcePanel
+AnimatedChart
+WorkflowNode
+WorkflowEdge
+PrintPreview
+ReceiptPreview
+```
+
+Only create components that genuinely improve maintainability.
+
+---
+
+# 83. DESIGN TOKENS
+
+Create central design tokens for:
+
+* colors
+* spacing
+* radius
+* typography
+* shadows
+* motion
+* breakpoints
+* z-index
+* component states
+
+Do not scatter styling magic numbers across the application.
+
+---
+
+# 84. DO NOT CREATE VISUAL INCONSISTENCY
+
+The following must remain consistent:
+
+* buttons
+* inputs
+* cards
+* badges
+* dialogs
+* dropdowns
+* tables
+* navigation
+* tabs
+* notifications
+* AI components
+* charts
+
+---
+
+# 85. VISUAL HIERARCHY
+
+Every screen should answer:
+
+1. Where am I?
+2. What matters right now?
+3. What can I do next?
+4. What requires my attention?
+5. Where can I find more detail?
+
+Do not overwhelm users with information simply because the system has lots of data.
+
+---
+
+# 86. INFORMATION DENSITY
+
+Healthcare staff work with data all day.
+
+Avoid excessive whitespace that makes operational interfaces inefficient.
+
+Create a balance:
+
+**Premium visual breathing room + practical data density.**
+
+---
+
+# 87. ROLE-SPECIFIC INFORMATION PRIORITY
+
+Do not simply change the menu.
+
+Change the visual emphasis.
+
+For example:
+
+### Receptionist
+
+Appointments, queue, registration.
+
+### Doctor
+
+Patients, consultations, results.
+
+### Pharmacist
+
+Prescriptions, dispensing, inventory.
+
+### Owner
+
+Revenue, operations, staff, bottlenecks.
+
+This should feel deliberate.
+
+---
+
+# 88. ANIMATED ICON BACKGROUNDS
+
+Use animated icons sparingly in selected high-level surfaces.
+
+Examples:
+
+* abstract healthcare icons
+* subtle workflow markers
+* data nodes
+* service icons
+
+Icons can drift slowly or react to cursor movement on marketing/login surfaces.
+
+Do not let icons fly around behind operational tables.
+
+---
+
+# 89. CURSOR / POINTER INTERACTIONS
+
+On selected marketing and presentation surfaces, use subtle pointer-responsive effects.
+
+For example:
+
+* cards subtly track pointer position
+* spotlight follows cursor
+* workflow nodes respond to hover
+
+Do NOT introduce excessive cursor effects throughout the operational application.
+
+---
+
+# 90. HERO / LANDING PAGE
+
+If the Curavilo marketing site exists in this codebase, create an exceptional visual hero.
+
+The hero should visually communicate:
+
+```text
+Healthcare facility
+       ↓
+Workflows
+       ↓
+Data
+       ↓
+AI
+       ↓
+Operations
+```
+
+Use animated UI representations rather than stock photography.
+
+Create an animated "living product" demonstration.
+
+The interface itself should be the visual hero.
+
+---
+
+# 91. LOGIN SCREEN
+
+Make the login experience memorable.
+
+Possible structure:
+
+```text
+Left
+Curavilo brand statement
+
+Right
+Login
+
+Background
+Subtle animated flow system
+```
+
+The animated environment should feel intelligent and calm.
+
+---
+
+# 92. ONBOARDING FINISH MOMENT
+
+When facility onboarding is completed:
+
+Create a satisfying transition:
+
+```text
+Configuration complete
+       ↓
+Services initialized
+       ↓
+Branding activated
+       ↓
+Workspaces prepared
+       ↓
+Welcome to Curavilo
+```
+
+Use a restrained celebration.
+
+Not childish confetti.
+
+---
+
+# 93. DASHBOARD PERSONALITY
+
+Each dashboard should feel like a workspace rather than a collection of cards.
+
+Create relationships between components.
+
+Example:
+
+If inventory is low:
+
+Inventory card can lead directly to the relevant inventory screen.
+
+If a queue is high:
+
+Queue card can show the relevant department.
+
+If follow-ups are overdue:
+
+AI button can offer to investigate them.
+
+UI should create natural pathways.
+
+---
+
+# 94. INTELLIGENT CROSS-LINKING
+
+Use contextual actions.
+
+Example:
+
+Patient page:
+
+```text
+Ask AI about patient
+Create appointment
+View billing
+View prescription
+```
+
+Pharmacy:
+
+```text
+View prescription
+View patient
+View sale
+View stock movement
+```
+
+Report:
+
+```text
+View records
+Ask AI about report
+Print
+Download
+```
+
+This makes the system feel connected.
+
+---
+
+# 95. ANIMATED NAVIGATION TO CONTEXT
+
+When opening a record from a dashboard, maintain visual continuity when practical.
+
+Example:
+
+Metric card:
+
+```text
+1,284 patients
+```
+
+Click.
+
+The patient/encounter screen can visually transition from the relevant dashboard context rather than feeling like an unrelated page.
+
+Use shared layout transitions where practical.
+
+---
+
+# 96. NOT TOO MUCH BLUR
+
+Use backdrop blur only where genuinely useful:
+
+* modal overlays
+* navigation overlays
+* selected floating components
+
+Do not build the entire application out of frosted glass.
+
+---
+
+# 97. NO GENERIC AI VISUAL LANGUAGE
+
+Avoid:
+
+* robot faces
+* glowing brains
+* neural-network illustrations
+* random circuit boards
+* "AI magic" stars everywhere
+* huge purple gradients
+* typing dots as the main AI identity
+
+Curavilo's AI should feel like:
+
+**intelligence operating quietly behind the system.**
+
+---
+
+# 98. NO STOCK MEDICAL GRAPHICS
+
+Avoid generic:
+
+* stethoscope backgrounds
+* doctors shaking hands
+* medical crosses
+* hospital building illustrations
+* medical DNA graphics
+
+Use product UI itself to tell the story.
+
+---
+
+# 99. INTERACTION SOUND
+
+Do not add sound by default.
+
+The product should work silently.
+
+If optional sound feedback is ever implemented, it must be opt-in and subtle.
+
+---
+
+# 100. PRINT BUTTON UX
+
+Print buttons should clearly communicate:
+
+```text
+Print
+↓
+Preparing document
+↓
+Preview
+↓
+Print
+```
+
+For thermal:
+
+```text
+Print Receipt
+↓
+80mm / 58mm selection if applicable
+↓
+Preview
+↓
+Print
+```
+
+---
+
+# 101. AI REPORT GENERATION ANIMATION
+
+When the AI creates a report:
+
+```text
+Analyzing request
+        ↓
+Retrieving records
+        ↓
+Calculating
+        ↓
+Building report
+        ↓
+Ready
+```
+
+These states should be tied to actual system events wherever possible.
+
+---
+
+# 102. WORKFLOW EXECUTION ANIMATION
+
+Create an execution playback mode useful for debugging and demonstration.
+
+Example:
+
+```text
+Step 1
+Registration
+
+✓ complete
+
+Step 2
+Triage
+
+● active
+
+Step 3
+Doctor
+
+○ waiting
+```
+
+Allow the user to inspect each step.
+
+This can become a strong product demonstration feature.
+
+---
+
+# 103. SIMULATION PLAYBACK
+
+Allow simulations to have:
+
+* Run
+* Pause
+* Reset
+* Replay
+
+The visual playback should remain analytical rather than game-like.
+
+---
+
+# 104. PERFORMANCE BUDGET
+
+The UI transformation must not meaningfully damage:
+
+* Core Web Vitals
+* initial page load
+* interaction latency
+* table performance
+* form performance
+* mobile performance
+
+If an animation is expensive and does not meaningfully improve understanding, remove it.
+
+---
+
+# 105. BROWSER COMPATIBILITY
+
+Verify major supported browsers.
+
+Do not depend on experimental CSS/JS features without graceful fallback.
+
+---
+
+# 106. ACCESSIBILITY REGRESSION TESTING
+
+After redesigning components, run accessibility checks.
+
+Test:
+
+* keyboard
+* focus
+* screen readers
+* reduced motion
+* contrast
+* form labels
+* dialogs
+* tables
+* menus
+
+Fix issues.
+
+---
+
+# 107. VISUAL QA
+
+Do not assume a UI is finished because it compiles.
+
+Use browser automation and visual inspection.
+
+Review at minimum:
+
+* desktop
+* tablet
+* mobile
+* light mode
+* dark mode
+
+Capture representative screenshots.
+
+Look specifically for:
+
+* spacing inconsistencies
+* accidental clipping
+* text overflow
+* broken alignment
+* excessive animation
+* bad responsive behavior
+* contrast problems
+* inconsistent components
+
+---
+
+# 108. UX REVIEW
+
+Perform an independent UX review.
+
+Ask:
+
+> Can a receptionist register a patient quickly?
+
+> Can a doctor identify the next patient immediately?
+
+> Can a pharmacist complete a sale without unnecessary clicks?
+
+> Can an owner understand the operational situation in seconds?
+
+> Can the user find print/export functionality immediately?
+
+> Can the user understand which role they are operating under?
+
+> Does the UI clearly distinguish facts, alerts and AI suggestions?
+
+Fix friction.
+
+---
+
+# 109. MOTION REVIEW
+
+Perform an independent motion review.
+
+Ask:
+
+> Which animations help comprehension?
+
+> Which animations are distracting?
+
+> Which animations delay work?
+
+> Which animations repeat unnecessarily?
+
+> Which animations fail in reduced-motion mode?
+
+Remove motion that does not earn its place.
+
+---
+
+# 110. COMPONENT QUALITY REVIEW
+
+Review the component system for:
+
+* duplication
+* inconsistent variants
+* random spacing
+* random animation timing
+* inaccessible interactions
+* excessive component complexity
+
+Consolidate where appropriate.
+
+---
+
+# 111. CODE QUALITY
+
+Use:
+
+* TypeScript
+* strongly typed props
+* reusable components
+* clean abstractions
+* predictable state management
+* modular architecture
+
+Do not introduce giant UI components containing hundreds/thousands of lines.
+
+Do not place all animations into one giant utility file.
+
+Organize motion primitives logically.
+
+---
+
+# 112. STATE MANAGEMENT
+
+Use the simplest state architecture that works.
+
+Do not introduce a global state library merely because the application is complex.
+
+Keep server state, URL state, local UI state and persistent state conceptually separate.
+
+---
+
+# 113. SERVER VS CLIENT COMPONENTS
+
+Respect the existing Next.js architecture.
+
+Use Server Components by default where appropriate.
+
+Use Client Components for:
+
+* interaction
+* animation
+* browser APIs
+* local UI state
+* real-time behavior
+
+Do not convert the entire application to client rendering just to make animations easier.
+
+---
+
+# 114. ANIMATION BOUNDARIES
+
+Do not send sensitive server-side data unnecessarily to client components merely for visual effects.
+
+Keep data access server-side.
+
+Pass only required data to animated presentation components.
+
+---
+
+# 115. DATA PRIVACY IN UI
+
+The visual redesign must not accidentally expose sensitive information.
+
+For example:
+
+* hidden fields must not merely be visually hidden if unauthorized
+* tooltips must not expose restricted data
+* animation state must not reveal private records
+* cached UI state must be cleared appropriately
+* search suggestions must respect permissions
+
+---
+
+# 116. ROLE-AWARE AI INTERFACE
+
+The AI interface should visually communicate the user's current context where helpful.
+
+Example:
+
+```text
+Curavilo AI
+Context: Eye Clinic
+
+You are viewing:
+John Adeyemi
+```
+
+Only show contexts the user is authorized to access.
+
+---
+
+# 117. SERVICE PROFILE AWARENESS
+
+The UI must dynamically reflect the facility's service profile.
+
+For an eye clinic:
+
+* terminology
+* icons
+* metrics
+* forms
+* workflows
+* dashboard widgets
+
+should adapt.
+
+For dental:
+
+different.
+
+For diagnostic:
+
+different.
+
+For GP:
+
+different.
+
+Do NOT create separate duplicated visual systems.
+
+Use shared design primitives + configuration.
+
+---
+
+# 118. DESIGN SYSTEM DOCUMENTATION
+
+Create:
+
+```text
+docs/design-system.md
+docs/motion-system.md
+docs/component-guidelines.md
+docs/ux-principles.md
+```
+
+Document:
+
+* colors
+* typography
+* spacing
+* component behavior
+* motion tokens
+* accessibility
+* animation rules
+* do/don't examples
+
+---
+
+# 119. CREATE DESIGN TOKENS
+
+Centralize design tokens.
+
+Example conceptual structure:
+
+```text
+colors
+typography
+spacing
+radii
+shadows
+motion
+breakpoints
+zIndex
+```
+
+Do not hard-code values unnecessarily.
+
+---
+
+# 120. REUSABLE MOTION UTILITIES
+
+Create utilities/components for:
+
+* fade in
+* slide up
+* scale
+* stagger
+* layout transitions
+* number counters
+* icon states
+* status animation
+* page transitions
+* section reveal
+
+Use these consistently.
+
+---
+
+# 121. INTERACTION PERFORMANCE
+
+Avoid:
+
+```text
+setInterval()
+```
+
+for unnecessary continuous UI animations.
+
+Prefer:
+
+* CSS animation
+* Motion
+* requestAnimationFrame
+* event-driven state changes
+
+where appropriate.
+
+---
+
+# 122. CLEANUP
+
+Every client-side effect must clean up:
+
+* event listeners
+* timers
+* animation frames
+* observers
+* subscriptions
+
+No memory leaks.
+
+---
+
+# 123. REDUCE RE-RENDERS
+
+Do not cause large dashboard trees to re-render continuously just because one animated element is moving.
+
+Isolate animated components.
+
+---
+
+# 124. RESPONSIVE ANIMATION
+
+Some motion should adapt to device capability.
+
+On lower-powered/mobile environments:
+
+* reduce particle count
+* reduce continuous animation
+* disable expensive effects where appropriate
+
+Functionality must remain intact.
+
+---
+
+# 125. IMPLEMENTATION ORDER
+
+Do not attempt to redesign every screen simultaneously.
+
+Work in vertical layers:
+
+## Phase 1
+
+Design system
+
+## Phase 2
+
+App shell/navigation
+
+## Phase 3
+
+Authentication/onboarding
+
+## Phase 4
+
+Owner dashboard
+
+## Phase 5
+
+Role dashboards
+
+## Phase 6
+
+Patient experience
+
+## Phase 7
+
+Workflow builder
+
+## Phase 8
+
+AI interface
+
+## Phase 9
+
+POS/pharmacy/inventory
+
+## Phase 10
+
+Reports/printing
+
+## Phase 11
+
+Analytics/simulation
+
+## Phase 12
+
+Responsive/accessibility/performance polish
+
+---
+
+# 126. EXISTING FUNCTIONALITY MUST SURVIVE
+
+Before modifying a page:
+
+Inspect:
+
+* routes
+* data loading
+* forms
+* server actions
+* API calls
+* permissions
+* state management
+* existing tests
+
+Do not break working functionality for visual polish.
+
+---
+
+# 127. USE REAL DATA STATES
+
+Do not design only for beautiful demo data.
+
+Every redesigned screen must support:
+
+* empty
+* loading
+* normal
+* busy
+* large dataset
+* error
+* permission denied
+* offline/poor connection where relevant
+
+---
+
+# 128. USE SYNTHETIC DEMO DATA
+
+Use the existing Curavilo synthetic data.
+
+Do not introduce real patient information.
+
+---
+
+# 129. BEFORE IMPLEMENTING A NEW LIBRARY
+
+Inspect the existing dependencies.
+
+Prefer existing libraries already used in the project.
+
+Only add dependencies where they provide meaningful value.
+
+Before adding an animation/visual library, confirm current compatibility with the project's Next.js/React versions.
+
+---
+
+# 130. FINAL QUALITY BAR
+
+The redesign must pass this test:
+
+### Screenshot test
+
+Would this look like a premium product in a product showcase?
+
+### 5-second test
+
+Can a user understand where they are and what matters immediately?
+
+### 30-second test
+
+Can they identify what to do next?
+
+### 5-minute test
+
+Can they complete their main task without fighting the UI?
+
+### 8-hour test
+
+Would a real hospital employee tolerate using it for an entire workday?
+
+### Distinctiveness test
+
+Does it look like Curavilo rather than a generic SaaS template?
+
+### Motion test
+
+Does animation improve the experience rather than simply prove that animation exists?
+
+### Performance test
+
+Does the product remain fast?
+
+### Accessibility test
+
+Does the product remain usable without animation or a mouse?
+
+---
+
+# 131. FINAL DESIGN DIRECTION
+
+The final Curavilo interface should feel like:
+
+> **A living operational system.**
+
+Not a static dashboard.
+
+Patient movement should feel like flow.
+
+Workflow execution should feel alive.
+
+AI should feel intelligent.
+
+Transactions should feel immediate.
+
+Reports should feel precise.
+
+Simulation should feel analytical.
+
+Notifications should feel meaningful.
+
+Printing should feel reliable.
+
+Every interaction should feel intentional.
+
+---
+
+# 132. REQUIRED EXECUTION BEHAVIOR
+
+Do not start coding immediately.
+
+First inspect the existing application and identify:
+
+1. Current design system.
+2. Current component system.
+3. Current UI inconsistencies.
+4. Current typography.
+5. Current color system.
+6. Current dashboard architecture.
+7. Current animation usage.
+8. Current dependencies.
+9. Current responsive implementation.
+10. Current accessibility state.
+
+Then produce a concise UI/UX transformation plan.
+
+After that:
+
+* implement the design system
+* implement motion tokens
+* implement shared primitives
+* redesign the application shell
+* redesign the highest-impact screens
+* test continuously
+* visually inspect
+* fix inconsistencies
+* continue screen by screen
+
+Do not mass-rewrite every page blindly.
+
+---
+
+# 133. REQUIRED DELIVERABLES
+
+At the end of this transformation, produce:
+
+### Design System
+
+```text
+colors
+typography
+spacing
+surfaces
+components
+motion
+icons
+states
+```
+
+### Motion System
+
+```text
+page transitions
+microinteractions
+status transitions
+animated backgrounds
+charts
+AI states
+workflow states
+```
+
+### UX System
+
+```text
+navigation
+information hierarchy
+role-based dashboards
+service-profile adaptation
+forms
+tables
+search
+commands
+notifications
+```
+
+### Accessibility
+
+```text
+keyboard
+focus
+screen reader
+contrast
+reduced motion
+responsive
+```
+
+### Documentation
+
+```text
+docs/design-system.md
+docs/motion-system.md
+docs/component-guidelines.md
+docs/ux-principles.md
+```
+
+---
+
+# 134. FINAL INSTRUCTION
+
+You are not being asked to make Curavilo "look fancy."
+
+You are being asked to make the product **feel exceptionally well designed**.
+
+Every visual decision must support:
+
+**clarity**
+
+**confidence**
+
+**speed**
+
+**context**
+
+**continuity**
+
+**intelligence**
+
+**trust**
+
+Use animation generously where it enhances these goals.
+
+Use JavaScript interactions extensively where they create meaningful responsiveness.
+
+But never sacrifice usability, accessibility, performance or healthcare professionalism for spectacle.
+
+The finished product should make a healthcare professional think:
+
+> **"This doesn't feel like ordinary hospital software."**
+
+And make them want to keep using it.

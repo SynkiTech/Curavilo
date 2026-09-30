@@ -170,7 +170,7 @@ export async function detectBottlenecks(ctx: AuthContext) {
       area: "LABORATORY",
       load: labTat._count.id,
       avgWaitProxy: round(labTat._avg.turnaroundMin ?? 0),
-      hint: "lab turnaround > 4h — verify staffing",
+      hint: "lab turnaround > 4h - verify staffing",
     });
   }
   return rows.slice(0, 5);

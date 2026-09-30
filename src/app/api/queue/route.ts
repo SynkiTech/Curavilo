@@ -1,4 +1,4 @@
-// Queue API — live board, walk-in check-in, queue actions
+// Queue API - live board, walk-in check-in, queue actions
 import { ok, fail, requireAuth, parseBody } from "@/lib/api";
 import { z } from "zod";
 import { listQueue, walkInCheckIn, walkInSchema, queueAction, type QueueAction } from "@/modules/scheduling";

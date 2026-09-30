@@ -1,6 +1,6 @@
 "use client";
 
-// Queue — live board with check-in, call, start encounter (spec §18)
+// Queue - live board with check-in, call, start encounter (spec §18)
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, PhoneCall, ClipboardPlus, Loader2, SkipForward } from "lucide-react";
@@ -48,7 +48,7 @@ export function Queue() {
     <div>
       <PageHeader
         title="Queue"
-        subtitle="Today's patient flow — check in, call, and start encounters."
+        subtitle="Today's patient flow - check in, call, and start encounters."
         actions={canOperate ? <Button className="bg-teal-700 hover:bg-teal-800" onClick={() => setWalkInOpen(true)}><UserPlus className="mr-2 h-4 w-4" /> Walk-in check-in</Button> : null}
       />
 

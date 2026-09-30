@@ -1,4 +1,4 @@
-// Encounters API — start, list, detail, complete (charges → invoice, follow-up, workflow trigger)
+// Encounters API - start, list, detail, complete (charges → invoice, follow-up, workflow trigger)
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { startEncounter, encounterStartSchema, completeEncounter, encounterCompleteSchema, listEncounters, getEncounter } from "@/modules/clinical";

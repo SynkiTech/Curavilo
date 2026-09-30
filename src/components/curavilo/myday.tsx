@@ -1,6 +1,6 @@
 "use client";
 
-// My Day — staff portal (spec §141): schedule, tasks, notifications,
+// My Day - staff portal (spec §141): schedule, tasks, notifications,
 // profile, certifications, leave requests
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -86,7 +86,7 @@ export function MyDay() {
             </CardHeader>
             <CardContent>
               {data.tasks.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">Nothing assigned — enjoy the calm.</p>
+                <p className="py-4 text-center text-sm text-muted-foreground">Nothing assigned - enjoy the calm.</p>
               ) : (
                 <ul className="divide-y text-sm">
                   {data.tasks.map((t) => (

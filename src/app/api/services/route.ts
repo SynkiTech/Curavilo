@@ -1,4 +1,4 @@
-// Services API — service catalogue list + create
+// Services API - service catalogue list + create
 import { ok, fail, requireAuth, parseBody } from "@/lib/api";
 import { z } from "zod";
 import { db } from "@/lib/db";

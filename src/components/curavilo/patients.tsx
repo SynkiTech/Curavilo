@@ -1,6 +1,6 @@
 "use client";
 
-// Patients — searchable registry with duplicate warnings + registration dialog
+// Patients - searchable registry with duplicate warnings + registration dialog
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, TriangleAlert } from "lucide-react";
@@ -32,7 +32,7 @@ export function Patients() {
     <div>
       <PageHeader
         title="Patients"
-        subtitle="Master patient index — search by name, MRN or phone."
+        subtitle="Master patient index - search by name, MRN or phone."
         actions={
           canWrite ? (
             <Button className="bg-teal-700 hover:bg-teal-800" onClick={() => setOpen(true)}>
@@ -159,11 +159,11 @@ export function RegisterDialog({
         {duplicates.length > 0 ? (
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm" role="alert">
             <div className="mb-1 flex items-center gap-1.5 font-medium text-amber-800">
-              <TriangleAlert className="h-4 w-4" /> Possible duplicates found — review before saving
+              <TriangleAlert className="h-4 w-4" /> Possible duplicates found - review before saving
             </div>
             <ul className="space-y-1 text-amber-800">
               {duplicates.map((d) => (
-                <li key={d.id}>· {d.name} ({d.mrn}) — {d.phone} · {d.reason}</li>
+                <li key={d.id}>· {d.name} ({d.mrn}) - {d.phone} · {d.reason}</li>
               ))}
             </ul>
             <p className="mt-1 text-xs text-amber-700">Records are never merged automatically. If this is a different person, confirm below.</p>
@@ -221,7 +221,7 @@ export function RegisterDialog({
 
         <DialogFooter className="gap-2">
           {duplicates.length > 0 ? (
-            <Button variant="outline" onClick={() => setDuplicates([])}>Not a duplicate — save anyway</Button>
+            <Button variant="outline" onClick={() => setDuplicates([])}>Not a duplicate - save anyway</Button>
           ) : null}
           <Button className="bg-teal-700 hover:bg-teal-800" disabled={!valid || mutation.isPending} onClick={() => { setError(null); mutation.mutate(); }}>
             {mutation.isPending ? "Saving…" : "Register patient"}

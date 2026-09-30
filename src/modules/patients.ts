@@ -1,4 +1,4 @@
-// Patients module — master index, duplicate detection, patient 360 (spec §14, §15)
+// Patients module - master index, duplicate detection, patient 360 (spec §14, §15)
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { nextMrn } from "@/lib/numbering";

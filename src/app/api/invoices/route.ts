@@ -1,4 +1,4 @@
-// Invoices API — list, create, detail, payments, void
+// Invoices API - list, create, detail, payments, void
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { createInvoice, invoiceCreateSchema, listInvoices, getInvoice, recordPayment, paymentSchema, voidPayment, voidInvoice } from "@/modules/billing";

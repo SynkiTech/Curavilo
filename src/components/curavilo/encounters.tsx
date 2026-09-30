@@ -1,6 +1,6 @@
 "use client";
 
-// Encounters — list + specialty form rendering from service profile (spec §19, §61)
+// Encounters - list + specialty form rendering from service profile (spec §19, §61)
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Save, Receipt } from "lucide-react";
@@ -30,7 +30,7 @@ export function Encounters() {
 
   return (
     <div>
-      <PageHeader title="Encounters" subtitle="Clinical records — specialty forms load from the facility service profile." />
+      <PageHeader title="Encounters" subtitle="Clinical records - specialty forms load from the facility service profile." />
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
       {data ? (
@@ -44,7 +44,7 @@ export function Encounters() {
                 {open.map((e) => (
                   <li key={e.id} className="rounded-lg border bg-white p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">{e.patient ? `${e.patient.firstName} ${e.patient.lastName}` : "—"}</span>
+                      <span className="text-sm font-medium">{e.patient ? `${e.patient.firstName} ${e.patient.lastName}` : "-"}</span>
                       <StatusBadge status={e.status} />
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">Started {formatDateTime(e.startedAt, session?.user?.timezone)} · {e.formKey.replaceAll("_", " ")}</div>
@@ -64,7 +64,7 @@ export function Encounters() {
                 {completed.slice(0, 10).map((e) => (
                   <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
                     <span>
-                      <span className="font-medium">{e.patient ? `${e.patient.firstName} ${e.patient.lastName}` : "—"}</span>
+                      <span className="font-medium">{e.patient ? `${e.patient.firstName} ${e.patient.lastName}` : "-"}</span>
                       <span className="ml-2 text-xs text-muted-foreground">{formatDateTime(e.startedAt, session?.user?.timezone)}{e.diagnosis ? ` · ${e.diagnosis}` : ""}</span>
                     </span>
                     <span className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export function EncounterDetail({ encounterId }: { encounterId: string }) {
         followUpDays: Number(followUpDays) || null,
       }),
     onSuccess: (res) => {
-      toast.success(res.invoice ? `Encounter completed — invoice ${res.invoice.number} issued.` : "Encounter completed.");
+      toast.success(res.invoice ? `Encounter completed - invoice ${res.invoice.number} issued.` : "Encounter completed.");
       queryClient.invalidateQueries({ queryKey: ["encounters"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["encounter", encounterId] });
@@ -143,7 +143,7 @@ export function EncounterDetail({ encounterId }: { encounterId: string }) {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{formTemplate.title}</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {e.patient ? `${e.patient.firstName} ${e.patient.lastName} (${e.patient.mrn})` : "—"} · started {formatDateTime(e.startedAt, user.timezone)}
+            {e.patient ? `${e.patient.firstName} ${e.patient.lastName} (${e.patient.mrn})` : "-"} · started {formatDateTime(e.startedAt, user.timezone)}
           </p>
         </div>
         <StatusBadge status={e.status} />
@@ -177,7 +177,7 @@ export function EncounterDetail({ encounterId }: { encounterId: string }) {
                       value={formValues[field.key] ?? savedFormData[field.key] ?? ""}
                       onChange={(ev) => setFormValues({ ...formValues, [field.key]: ev.target.value })}
                     >
-                      <option value="">—</option>
+                      <option value="">-</option>
                       {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   ) : (
@@ -197,8 +197,8 @@ export function EncounterDetail({ encounterId }: { encounterId: string }) {
 
         {isCompleted ? (
           <div className="rounded-lg border bg-white p-4 text-sm text-muted-foreground">
-            <p><span className="font-medium text-stone-700">Diagnosis:</span> {e.diagnosis || "—"}</p>
-            <p className="mt-1"><span className="font-medium text-stone-700">Plan:</span> {e.plan || "—"}</p>
+            <p><span className="font-medium text-stone-700">Diagnosis:</span> {e.diagnosis || "-"}</p>
+            <p className="mt-1"><span className="font-medium text-stone-700">Plan:</span> {e.plan || "-"}</p>
             <p className="mt-2 text-xs">Clinical records are completed once; corrections are made via the audit trail, never by silent overwrites.</p>
           </div>
         ) : (

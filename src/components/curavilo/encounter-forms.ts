@@ -1,5 +1,5 @@
 // Client-side mirror of service profile encounter form templates (lib/service-profiles.ts).
-// Starter templates — require professional clinical review before production use.
+// Starter templates - require professional clinical review before production use.
 export interface FormField { key: string; label: string; type: "text" | "number" | "textarea" | "select"; required?: boolean; options?: string[]; unit?: string }
 export interface FormSection { title: string; fields: FormField[] }
 export interface EncounterFormTemplate { key: string; title: string; sections: FormSection[] }
@@ -70,7 +70,7 @@ export const ENCOUNTER_FORMS: Record<string, EncounterFormTemplate> = {
     key: "DENTAL_EXAM",
     title: "Dental Examination",
     sections: [
-      { title: "Odontogram", fields: [{ key: "toothChart", label: "Tooth Chart Notes (e.g. 16, 26 — caries)", type: "textarea", required: true }] },
+      { title: "Odontogram", fields: [{ key: "toothChart", label: "Tooth Chart Notes (e.g. 16, 26 - caries)", type: "textarea", required: true }] },
       {
         title: "Assessment",
         fields: [

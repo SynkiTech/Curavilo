@@ -1,4 +1,4 @@
-// AI agent — two-phase grounded agent (ADR 0003, spec §41–54)
+// AI agent - two-phase grounded agent (ADR 0003, spec §41–54)
 // Round 1: plan (strict JSON tool call or clarification)
 // Round 2: compose grounded answer from validated tool result + provenance
 import ZAI from "z-ai-web-dev-sdk";
@@ -41,7 +41,7 @@ Respond with STRICT JSON only, no markdown, no prose. Exactly ONE of these shape
 1. Single tool:  {"tool":"<tool_name>","params":{...},"reason":"short"}
 2. Multi-step (up to 3 read-only tools for multi-part questions):  {"tool":"multi","steps":[{"tool":"<tool_name>","params":{...}}],"reason":"short"}
 3. Clarification (ambiguous or not a data question):  {"tool":null,"clarification":"<one short sentence>"}
-4. Action PROPOSAL (operational follow-ups only — you NEVER execute actions):  {"tool":null,"action":{"name":"create_follow_up|create_task|generate_report","params":{...}},"reason":"short"}
+4. Action PROPOSAL (operational follow-ups only - you NEVER execute actions):  {"tool":null,"action":{"name":"create_follow_up|create_task|generate_report","params":{...}},"reason":"short"}
    Actions: create_follow_up {patientId?, patientMrn?, title, dueInDays}, create_task {title, role?, priority?}, generate_report {reportKey: REVENUE_SUMMARY|PATIENT_VOLUME, title}. Only propose an action when the user explicitly asks to create/schedule/generate something.
 
 Rules:
@@ -178,7 +178,7 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
       provenance = result!.provenance;
     }
   } else if (plan?.action && typeof plan.action.name === "string") {
-    // ── Action proposal: never executed here — surfaced for human confirmation (spec §50–51).
+    // ── Action proposal: never executed here - surfaced for human confirmation (spec §50–51).
     const registered = ACT_ACTIONS.find((a) => a.name === plan.action!.name);
     if (!registered || registered.risk !== "LOW") {
       answer = "That action is not available through AI. Only low-risk operational actions (create follow-up, create task, generate report) can be proposed.";
@@ -189,7 +189,7 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
         risk: registered.risk,
         reason: plan.reason,
       };
-      answer = `I can ${registered.description.toLowerCase()} — review and confirm below. Nothing happens until you approve.`;
+      answer = `I can ${registered.description.toLowerCase()} - review and confirm below. Nothing happens until you approve.`;
     }
     toolResultJson = null;
   } else if (plan && plan.tool === null && plan.clarification) {
@@ -231,7 +231,7 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
   return { conversationId: conversation.id, answer, provenance, toolName, usedTool, pendingAction };
 }
 
-// ─── ACT mode — human-confirmed low-risk actions (spec §50–51) ──────────────
+// ─── ACT mode - human-confirmed low-risk actions (spec §50–51) ──────────────
 
 interface ActActionDef {
   name: string;

@@ -1,6 +1,6 @@
 "use client";
 
-// Patient portal (spec §141) — code-gated read-only access to appointments,
+// Patient portal (spec §141) - code-gated read-only access to appointments,
 // invoices, prescriptions/results, follow-ups and recent visits.
 import { useEffect, useState } from "react";
 import { ArrowLeft, KeyRound, Loader2 } from "lucide-react";
@@ -51,7 +51,7 @@ export function PatientPortal({ onBack }: { onBack: () => void }) {
       if (!res.ok || body?.error) throw new Error(body?.error?.message ?? "Sign-in failed.");
       const session = await fetch("/api/portal", { cache: "no-store" }).then((r) => r.json());
       setData(session as PortalData);
-      toast.success("Welcome — showing your records.");
+      toast.success("Welcome - showing your records.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not sign in to the portal.");
     } finally {
@@ -140,7 +140,7 @@ export function PatientPortal({ onBack }: { onBack: () => void }) {
                 <ul className="text-sm">
                   {data.followUps.map((f, i) => <li key={i} className="flex justify-between py-1"><span>{f.title}</span><span className="text-xs text-muted-foreground">due {formatDateTime(f.dueAt)}</span></li>)}
                   {data.recentVisits.slice(0, 3).map((v, i) => (
-                    <li key={i} className="py-1 text-xs text-muted-foreground">Visit {formatDateTime(v.startedAt)}{v.diagnosis ? ` — ${v.diagnosis}` : ""}{v.plan ? ` · plan: ${v.plan.slice(0, 80)}` : ""}</li>
+                    <li key={i} className="py-1 text-xs text-muted-foreground">Visit {formatDateTime(v.startedAt)}{v.diagnosis ? ` - ${v.diagnosis}` : ""}{v.plan ? ` · plan: ${v.plan.slice(0, 80)}` : ""}</li>
                   ))}
                 </ul>
               )}

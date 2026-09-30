@@ -1,6 +1,6 @@
 "use client";
 
-// POS / Pharmacy — cart, payment, transactional sale + receipt (spec §21)
+// POS / Pharmacy - cart, payment, transactional sale + receipt (spec §21)
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Minus, Plus, ScanBarcode, ShoppingCart as CartIcon, Trash2 } from "lucide-react";
@@ -125,7 +125,7 @@ export function POS() {
             </div>
             <ul className="divide-y">
               {cart.length === 0 ? (
-                <li className="px-4 py-10 text-center text-sm text-muted-foreground">Cart is empty — tap items to add.</li>
+                <li className="px-4 py-10 text-center text-sm text-muted-foreground">Cart is empty - tap items to add.</li>
               ) : (
                 cart.map((line) => (
                   <li key={line.item.id} className="flex items-center gap-2 px-4 py-2.5">
@@ -195,7 +195,7 @@ export function POS() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Sale receipt</DialogTitle>
-            <DialogDescription>Thermal 80mm selected by default — choose another profile if needed.</DialogDescription>
+            <DialogDescription>Thermal 80mm selected by default - choose another profile if needed.</DialogDescription>
           </DialogHeader>
           {receipt ? (
             <DocumentRenderer

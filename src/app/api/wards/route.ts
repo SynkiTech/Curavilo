@@ -1,4 +1,4 @@
-// Inpatient API — wards, beds, admissions, discharge, referrals (spec §137)
+// Inpatient API - wards, beds, admissions, discharge, referrals (spec §137)
 import { z } from "zod";
 import { ok, fail, parseBody, parseQuery, requireAuth } from "@/lib/api";
 import {

@@ -1,4 +1,4 @@
-// Staff API — directory list + create (settings:manage for writes, staff:read for list)
+// Staff API - directory list + create (settings:manage for writes, staff:read for list)
 import { ok, fail, requireAuth, parseBody } from "@/lib/api";
 import { z } from "zod";
 import { db } from "@/lib/db";

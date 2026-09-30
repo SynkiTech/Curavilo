@@ -1,7 +1,7 @@
 "use client";
 
 // Shared UI primitives: states, cards, badges, small dialogs
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Loader2, AlertCircle, Inbox, ShieldX, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +59,103 @@ export function StatCard({ title, value, hint, tone }: { title: string; value: s
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-semibold tabular-nums">{value}</div>
+        {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Animated metric card (dashboard grade) ─────────────────────────────── */
+
+export type Accent = "teal" | "cyan" | "violet" | "amber" | "rose" | "emerald" | "indigo";
+
+const ACCENT_CHIP: Record<Accent, string> = {
+  teal: "from-teal-500 to-emerald-400",
+  cyan: "from-cyan-500 to-sky-400",
+  violet: "from-violet-500 to-fuchsia-400",
+  amber: "from-amber-500 to-orange-400",
+  rose: "from-rose-500 to-pink-400",
+  emerald: "from-emerald-500 to-teal-400",
+  indigo: "from-indigo-500 to-blue-400",
+};
+
+const ACCENT_TEXT: Record<Accent, string> = {
+  teal: "text-teal-600",
+  cyan: "text-cyan-600",
+  violet: "text-violet-600",
+  amber: "text-amber-600",
+  rose: "text-rose-600",
+  emerald: "text-emerald-600",
+  indigo: "text-indigo-600",
+};
+
+/** requestAnimationFrame count-up with ease-out cubic; respects reduced motion via instant value. */
+export function useCountUp(target: number, duration = 950): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      if (reduced) {
+        setValue(target);
+        return;
+      }
+      const p = Math.min(1, (t - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setValue(Math.round(target * eased * 100) / 100);
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else setValue(target);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+export function AnimatedNumber({ value, format }: { value: number; format?: (n: number) => string }) {
+  const v = useCountUp(value);
+  return <span className="tabular-nums">{format ? format(v) : Math.round(v).toLocaleString()}</span>;
+}
+
+export function MetricCard({
+  title,
+  value,
+  hint,
+  icon: Icon,
+  accent = "teal",
+  tone = "default",
+  delay = 0,
+  formatValue,
+}: {
+  title: string;
+  value: string | number;
+  hint?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  accent?: Accent;
+  tone?: "default" | "warn";
+  delay?: number;
+  formatValue?: (n: number) => string;
+}) {
+  const numeric = typeof value === "number";
+  return (
+    <Card
+      className={`curvilo-card curvilo-rise relative overflow-hidden ${tone === "warn" ? "border-amber-300/70 bg-amber-50/40" : ""}`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${ACCENT_CHIP[accent]}`} />
+      <CardHeader className="flex-row items-center gap-2 pb-1">
+        {Icon ? (
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${ACCENT_CHIP[accent]} text-white shadow-sm`}>
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        ) : null}
+        <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className={`text-2xl font-bold tracking-tight ${tone === "warn" ? "text-amber-700" : ACCENT_TEXT[accent]}`}>
+          {numeric ? <AnimatedNumber value={value as number} format={formatValue} /> : value}
+        </div>
         {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
       </CardContent>
     </Card>

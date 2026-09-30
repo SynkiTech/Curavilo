@@ -1,6 +1,6 @@
 "use client";
 
-// Onboarding wizard — Organization → Facility & service profile → Branding → Admin (spec §10)
+// Onboarding wizard - Organization → Facility & service profile → Branding → Admin (spec §10)
 import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Building2, Check, ImagePlus, Loader2, Sparkles, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { useApp } from "./store";
 import { PROFILES_META } from "./profile-meta";
 import { AnimatedBackground } from "./animated-bg";
 
-const NETWORK_PROBLEM = "Cannot reach the server right now — it may be starting up. Please wait a moment and try again.";
+const NETWORK_PROBLEM = "Cannot reach the server right now - it may be starting up. Please wait a moment and try again.";
 
 const STEPS = ["Organization", "Facility & profile", "Branding", "Admin account"] as const;
 
@@ -115,7 +115,7 @@ export function Onboarding({ onBack }: { onBack: () => void }) {
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight text-white">Register your facility</h1>
         <p className="mt-1 text-sm text-teal-100/75">
-          Curavilo adapts to your specialty — terminology, forms, catalogue and dashboards load from your service profile.
+          Curavilo adapts to your specialty - terminology, forms, catalogue and dashboards load from your service profile.
         </p>
 
         <ol className="mt-6 flex items-center gap-2" aria-label="Onboarding steps">
@@ -163,7 +163,7 @@ export function Onboarding({ onBack }: { onBack: () => void }) {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="facilityName">Facility name</Label>
-                    <Input id="facilityName" value={facilityName} onChange={(e) => setFacilityName(e.target.value)} placeholder="e.g. Lagos Eye Care — Ikeja" />
+                    <Input id="facilityName" value={facilityName} onChange={(e) => setFacilityName(e.target.value)} placeholder="e.g. Lagos Eye Care - Ikeja" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="facilityType">Facility type</Label>
@@ -244,7 +244,7 @@ export function Onboarding({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="receiptFooter">Receipt footer</Label>
-                  <Textarea id="receiptFooter" rows={2} value={receiptFooter} onChange={(e) => setReceiptFooter(e.target.value)} placeholder="e.g. Thank you for your visit — get well soon!" />
+                  <Textarea id="receiptFooter" rows={2} value={receiptFooter} onChange={(e) => setReceiptFooter(e.target.value)} placeholder="e.g. Thank you for your visit - get well soon!" />
                 </div>
               </div>
             ) : null}

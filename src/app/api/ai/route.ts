@@ -1,4 +1,4 @@
-// AI API — grounded data agent (permission-checked server-side)
+// AI API - grounded data agent (permission-checked server-side)
 import { ok, fail, requireAuth, parseBody } from "@/lib/api";
 import { z } from "zod";
 import { askAgent, listConversations, getConversation } from "@/modules/ai/agent";

@@ -1,6 +1,6 @@
 "use client";
 
-// Lab & Radiology — diagnostic orders lifecycle (spec §137):
+// Lab & Radiology - diagnostic orders lifecycle (spec §137):
 // ORDERED → SPECIMEN_COLLECTED → RESULT_ENTERED → VERIFIED → RELEASED
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -182,7 +182,7 @@ export function Lab() {
                     </Card>
                   ) : null}
                   <div className="space-y-1.5">
-                    <Label htmlFor="results">Results (one per line — Name: value unit)</Label>
+                    <Label htmlFor="results">Results (one per line - Name: value unit)</Label>
                     <Textarea id="results" rows={5} value={resultsText} onChange={(e) => setResultsText(e.target.value)} placeholder={"Haemoglobin: 11.2 g/dL\nMalaria parasite: Not seen"} />
                     <Label htmlFor="impression">Impression (optional)</Label>
                     <Textarea id="impression" rows={2} value={impression} onChange={(e) => setImpression(e.target.value)} />
@@ -196,7 +196,7 @@ export function Lab() {
               {selected.status === "RESULT_ENTERED" ? (
                 <Card>
                   <CardContent className="flex items-center justify-between pt-4">
-                    <span className="text-sm">Results entered — verify to release to the patient.</span>
+                    <span className="text-sm">Results entered - verify to release to the patient.</span>
                     <Button size="sm" disabled={!canOperate || act.isPending} onClick={() => act.mutate({ action: "VERIFY", orderId: selected.id })}>
                       Verify results
                     </Button>
@@ -207,7 +207,7 @@ export function Lab() {
               {selected.status === "VERIFIED" ? (
                 <Card>
                   <CardContent className="flex items-center justify-between pt-4">
-                    <span className="text-sm">Verified — release to publish the report and notify.</span>
+                    <span className="text-sm">Verified - release to publish the report and notify.</span>
                     <Button size="sm" disabled={!canOperate || act.isPending} onClick={() => act.mutate({ action: "RELEASE", orderId: selected.id })}>
                       <Send className="mr-1.5 h-3.5 w-3.5" /> Release report
                     </Button>

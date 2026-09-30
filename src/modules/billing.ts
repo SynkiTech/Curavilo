@@ -1,4 +1,4 @@
-// Billing module — invoices, payments, receipts (spec §20, §37, §100)
+// Billing module - invoices, payments, receipts (spec §20, §37, §100)
 // Deterministic arithmetic only. Payments are append-only; void instead of delete.
 import { z } from "zod";
 import { db } from "@/lib/db";

@@ -1,4 +1,4 @@
-// RBAC — roles and granular permissions. Deny by default. (spec §16, §17)
+// RBAC - roles and granular permissions. Deny by default. (spec §16, §17)
 
 export const PERMISSIONS = [
   "patients:read",

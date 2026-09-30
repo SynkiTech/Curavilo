@@ -4,7 +4,7 @@
 // pump merely advances it every 30 s (wakes workflow timers, dispatches the
 // outbox, delivers webhooks, runs detection jobs). Every job is idempotent and
 // org-scoped, so a missed or duplicated tick is harmless. In production this
-// swaps for pg-boss / BullMQ against the same tables — the pump is disposable
+// swaps for pg-boss / BullMQ against the same tables - the pump is disposable
 // by design.
 
 import { db } from "@/lib/db";
@@ -46,7 +46,7 @@ export function startScheduler() {
   const state: SchedulerState = globalForScheduler.__curaviloScheduler ?? { running: false, ticks: 0 };
   state.timer = setInterval(() => void tick(), TICK_MS);
   globalForScheduler.__curaviloScheduler = state;
-  console.log("[scheduler] started — tick every", TICK_MS / 1000, "s");
+  console.log("[scheduler] started - tick every", TICK_MS / 1000, "s");
   // First tick shortly after boot so parked work resumes quickly.
   setTimeout(() => void tick(), 3_000);
 }

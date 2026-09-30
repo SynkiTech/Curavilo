@@ -1,4 +1,4 @@
-// Reports API — revenue, patient volume, pharmacy sales (permission-filtered)
+// Reports API - revenue, patient volume, pharmacy sales (permission-filtered)
 import { ok, fail, requireAuth, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { revenueReport, patientVolumeReport, pharmacySalesReport } from "@/modules/reports";

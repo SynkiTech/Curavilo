@@ -1,4 +1,4 @@
-// Service Profile Engine — configuration over hard-coding (spec §11, §12, §13)
+// Service Profile Engine - configuration over hard-coding (spec §11, §12, §13)
 // Starter profiles are templates, NOT clinical protocols. Forms must be reviewed
 // by professionals before production clinical use.
 
@@ -175,7 +175,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
         {
           title: "Odontogram",
           fields: [
-            { key: "toothChart", label: "Tooth Chart Notes (e.g. 16, 26 — caries)", type: "textarea", required: true },
+            { key: "toothChart", label: "Tooth Chart Notes (e.g. 16, 26 - caries)", type: "textarea", required: true },
           ],
         },
         {
@@ -511,7 +511,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
           title: "Session",
           fields: [
             { key: "mood", label: "Mood (1–10)", type: "number", required: true },
-            { key: "riskAssessment", label: "Risk Assessment", type: "select", options: ["None identified", "Low", "Moderate", "High — escalate"], required: true },
+            { key: "riskAssessment", label: "Risk Assessment", type: "select", options: ["None identified", "Low", "Moderate", "High - escalate"], required: true },
             { key: "sessionNotes", label: "Session Notes (confidential)", type: "textarea" },
           ],
         },

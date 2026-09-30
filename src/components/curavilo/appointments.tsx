@@ -1,6 +1,6 @@
 "use client";
 
-// Appointments — schedule, status management, check-in to queue
+// Appointments - schedule, status management, check-in to queue
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarPlus, Loader2 } from "lucide-react";
@@ -98,7 +98,7 @@ function AppointmentRow({ appointment: a, timezone, canWrite, onChanged, onOpenP
     try {
       await apiSend("PATCH", `/api/appointments`, { action: act, id: a.id });
       onChanged();
-      if (act === "CHECK_IN") toast.success("Checked in — queue number assigned.");
+      if (act === "CHECK_IN") toast.success("Checked in - queue number assigned.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -111,11 +111,11 @@ function AppointmentRow({ appointment: a, timezone, canWrite, onChanged, onOpenP
       <TableCell className="whitespace-nowrap text-xs">{formatDateTime(a.scheduledAt, timezone)}</TableCell>
       <TableCell>
         <button className="font-medium hover:text-teal-700 hover:underline" onClick={onOpenPatient}>
-          {a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : "—"}
+          {a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : "-"}
         </button>
       </TableCell>
-      <TableCell className="hidden sm:table-cell">{a.serviceItem?.name ?? "—"}</TableCell>
-      <TableCell className="hidden md:table-cell">{a.staffMember?.name ?? "—"}</TableCell>
+      <TableCell className="hidden sm:table-cell">{a.serviceItem?.name ?? "-"}</TableCell>
+      <TableCell className="hidden md:table-cell">{a.staffMember?.name ?? "-"}</TableCell>
       <TableCell><StatusBadge status={a.status} /></TableCell>
       {canWrite ? (
         <TableCell className="text-right">
@@ -242,7 +242,7 @@ export function CreateAppointmentDialog({
           <div className="space-y-1">
             <Label htmlFor="appt-service">Service</Label>
             <select id="appt-service" value={serviceItemId} onChange={(e) => setServiceItemId(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-              <option value="">— optional —</option>
+              <option value="">- optional -</option>
               {services.data?.services.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} · {s.priceMinor / 100}</option>
               ))}
@@ -251,7 +251,7 @@ export function CreateAppointmentDialog({
           <div className="space-y-1">
             <Label htmlFor="appt-staff">Staff</Label>
             <select id="appt-staff" value={staffMemberId} onChange={(e) => setStaffMemberId(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-              <option value="">— optional —</option>
+              <option value="">- optional -</option>
               {staff.data?.staff.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} ({s.designation})</option>
               ))}

@@ -1,5 +1,5 @@
 // Provider-neutral communication layer (spec §62, §134).
-// All external providers sit behind MessageAdapter interfaces — the domain layer
+// All external providers sit behind MessageAdapter interfaces - the domain layer
 // never hard-codes a vendor. In this sandbox the "console" adapters simulate
 // delivery deterministically and log it; production adapters (Termii, Africa's
 // Talking, Twilio, Meta WhatsApp Cloud) implement the same interface.
@@ -38,7 +38,7 @@ function ref(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString("hex")}`;
 }
 
-/** Dev/sandbox adapter — simulates delivery, deterministic success. */
+/** Dev/sandbox adapter - simulates delivery, deterministic success. */
 class ConsoleAdapter implements MessageAdapter {
   readonly provider = "console";
   constructor(private readonly prefix: string) {}

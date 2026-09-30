@@ -1,4 +1,4 @@
-// Curavilo seed — synthetic demo facilities only (spec §93: no real patient data, ever).
+// Curavilo seed - synthetic demo facilities only (spec §93: no real patient data, ever).
 // Run: bun prisma/seed.ts
 import { PrismaClient } from "@prisma/client";
 import { randomBytes, scryptSync } from "crypto";
@@ -69,14 +69,14 @@ async function main() {
   const eyeFacility = await db.facility.create({
     data: {
       orgId: eyeOrg.id,
-      name: "Lagos Central Eye Clinic — Ikeja",
+      name: "Lagos Central Eye Clinic - Ikeja",
       type: "CLINIC",
       serviceProfileKey: "EYE_CLINIC",
       address: "24 Awolowo Way, Ikeja, Lagos",
       phone: "+234 802 555 0110",
       email: "hello@lagoscentral-eye.ng",
       reportFooter: "Thank you for choosing Lagos Central Eye Clinic.",
-      receiptFooter: "Thank you for your visit — get well soon!",
+      receiptFooter: "Thank you for your visit - get well soon!",
     },
   });
 
@@ -220,7 +220,7 @@ async function main() {
     data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, patientId: patients[6].id, department: "OPHTHALMOLOGY", number: 4, status: "WAITING", checkedInAt: todayAt(9, 25) },
   });
 
-  // Encounters (completed) with invoices + payments — last 30 days
+  // Encounters (completed) with invoices + payments - last 30 days
   const eyeExamData = (vaOd: string, vaOs: string, iopOd: number, iopOs: number) =>
     JSON.stringify({ vaOd, vaOs, pinhole: "", refractionOd: "-0.50 DS", refractionOs: "-0.75 DS", nearAdd: "", iopOd, iopOs, anteriorSegment: "Quiet and white", fundus: "C/D 0.3 both eyes" });
 
@@ -229,7 +229,7 @@ async function main() {
     { patient: 4, days: 21, dx: "Allergic conjunctivitis", items: ["CONS-EYE", "EXAM-EYE"], payFull: true, formData: eyeExamData("6/5", "6/5", 15, 14) },
     { patient: 5, days: 14, dx: "Uncorrected refractive error", items: ["CONS-EYE", "REFRACT"], payFull: false, formData: eyeExamData("6/18", "6/24", 16, 17) },
     { patient: 6, days: 7, dx: "Dry eye syndrome", items: ["CONS-EYE", "EXAM-EYE"], payFull: true, formData: eyeExamData("6/6", "6/6", 14, 15) },
-    { patient: 7, days: 3, dx: "Cataract — age related, right eye", items: ["CONS-EYE", "IOP"], payFull: false, formData: eyeExamData("6/36", "6/9", 12, 13) },
+    { patient: 7, days: 3, dx: "Cataract - age related, right eye", items: ["CONS-EYE", "IOP"], payFull: false, formData: eyeExamData("6/36", "6/9", 12, 13) },
   ] as const;
 
   let invoiceSeq = 0, paymentSeq = 0, encounterSeq = 0;
@@ -336,7 +336,7 @@ async function main() {
         trigger: "ENCOUNTER_COMPLETED",
         nodes: [
           { id: "n1", type: "CREATE_FOLLOWUP", config: { title: "Follow-up visit", days: 14 } },
-          { id: "n2", type: "NOTIFY", config: { title: "Encounter completed", body: "A patient encounter completed — schedule the follow-up.", role: "RECEPTIONIST" } },
+          { id: "n2", type: "NOTIFY", config: { title: "Encounter completed", body: "A patient encounter completed - schedule the follow-up.", role: "RECEPTIONIST" } },
           { id: "n3", type: "CREATE_TASK", config: { title: "Call patient to confirm follow-up", role: "NURSE", priority: "NORMAL" } },
         ],
         edges: [{ from: "n1", to: "n2" }, { from: "n2", to: "n3" }],
@@ -358,9 +358,9 @@ async function main() {
   });
   const gpFacility = await db.facility.create({
     data: {
-      orgId: gpOrg.id, name: "Gracefield GMC — Yaba", type: "CLINIC", serviceProfileKey: "GENERAL_PRACTICE",
+      orgId: gpOrg.id, name: "Gracefield GMC - Yaba", type: "CLINIC", serviceProfileKey: "GENERAL_PRACTICE",
       address: "5 Herbert Macaulay Way, Yaba, Lagos", phone: "+234 801 222 3344",
-      reportFooter: "Gracefield GMC — caring for you.", receiptFooter: "Get well soon!",
+      reportFooter: "Gracefield GMC - caring for you.", receiptFooter: "Get well soon!",
     },
   });
   const gpOwner = await db.user.create({

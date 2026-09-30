@@ -1,4 +1,4 @@
-// Sales (POS) module — transactional sale + payment + stock deduction + receipt (spec §21, §69)
+// Sales (POS) module - transactional sale + payment + stock deduction + receipt (spec §21, §69)
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";

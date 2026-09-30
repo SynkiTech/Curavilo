@@ -1,4 +1,4 @@
-// Settings API — facility branding/profile + terminology preview
+// Settings API - facility branding/profile + terminology preview
 import { ok, fail, requireAuth, parseBody } from "@/lib/api";
 import { z } from "zod";
 import { db } from "@/lib/db";

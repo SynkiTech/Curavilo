@@ -1,4 +1,4 @@
-// Curavilo — multi-tenant healthcare operating platform
+// Curavilo - multi-tenant healthcare operating platform
 // Money: ALL amounts are integers in minor units (kobo) + currency code. No floats.
 
 generator client {
@@ -450,7 +450,7 @@ model WorkflowDef {
   description String?
   status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
   version     Int       @default(1)
-  definition  String // JSON: { trigger, nodes: [...], edges: [...], schedule?, slaMinutes? } — declarative, no executable code
+  definition  String // JSON: { trigger, nodes: [...], edges: [...], schedule?, slaMinutes? } - declarative, no executable code
   slaMinutes  Int? // run-level SLA; breach detected by scheduler
   publishedAt DateTime?
   createdAt   DateTime  @default(now())

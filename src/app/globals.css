@@ -222,3 +222,112 @@
     animation: none;
   }
 }
+
+/* ─── Curavilo dashboard effects ─────────────────────────────────────────── */
+
+/* Staggered entrance: fade + rise */
+@keyframes curvilo-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.curvilo-rise {
+  animation: curvilo-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Animated hero gradient band */
+@keyframes curvilo-hero {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.curvilo-hero {
+  background: linear-gradient(115deg, #0f766e 0%, #0e7490 28%, #4f46e5 62%, #7c3aed 100%);
+  background-size: 220% 220%;
+  animation: curvilo-hero 14s ease-in-out infinite;
+}
+
+/* Sheen sweep across cards / hero */
+@keyframes curvilo-sheen {
+  0%   { transform: translateX(-130%) skewX(-12deg); }
+  55%, 100% { transform: translateX(230%) skewX(-12deg); }
+}
+.curvilo-sheen {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: curvilo-sheen 6.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Live pulse ring for in-service / queue indicators */
+@keyframes curvilo-ping {
+  0%   { transform: scale(1); opacity: 0.7; }
+  80%, 100% { transform: scale(2.4); opacity: 0; }
+}
+.curvilo-ping::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: curvilo-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Card hover lift + accent glow */
+.curvilo-card {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.curvilo-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px -14px rgb(13 148 136 / 0.38), 0 4px 12px -6px rgb(15 23 42 / 0.12);
+  border-color: rgb(45 212 191 / 0.55);
+}
+
+/* Sidebar nav micro-interaction */
+.curvilo-nav-item {
+  transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+.curvilo-nav-item:hover {
+  transform: translateX(3px);
+}
+
+/* Thin elegant scrollbar for the dark sidebar */
+.curvilo-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.22) transparent;
+}
+.curvilo-scroll::-webkit-scrollbar { width: 6px; }
+.curvilo-scroll::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.22);
+  border-radius: 9999px;
+}
+.curvilo-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Rotating conic glow behind the brand mark */
+@keyframes curvilo-spin {
+  to { transform: rotate(360deg); }
+}
+.curvilo-spin-slow { animation: curvilo-spin 9s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .curvilo-rise,
+  .curvilo-hero,
+  .curvilo-sheen,
+  .curvilo-ping::after,
+  .curvilo-spin-slow {
+    animation: none;
+  }
+  .curvilo-card,
+  .curvilo-nav-item {
+    transition: none;
+  }
+}
+
+@media print {
+  .curvilo-rise,
+  .curvilo-hero,
+  .curvilo-sheen {
+    animation: none !important;
+  }
+}

@@ -3,7 +3,7 @@ export const PROFILES_META = [
   {
     key: "EYE_CLINIC",
     name: "Eye Clinic",
-    description: "Ophthalmology / optometry — visual acuity, refraction, IOP.",
+    description: "Ophthalmology / optometry - visual acuity, refraction, IOP.",
     terminologyPreview: "Eye Examination · Visual Acuity · IOP · Refraction",
     catalogueCount: 6,
     formTitle: "Ophthalmic Examination",

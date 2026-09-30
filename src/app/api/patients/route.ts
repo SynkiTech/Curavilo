@@ -1,4 +1,4 @@
-// Patients API — list/search, register, patient 360, update
+// Patients API - list/search, register, patient 360, update
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { registerPatient, patientSchema, searchPatients } from "@/modules/patients";

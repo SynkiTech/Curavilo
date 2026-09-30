@@ -1,4 +1,4 @@
-// Audit API — append-only event list (audit:read only) + document print events
+// Audit API - append-only event list (audit:read only) + document print events
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { db } from "@/lib/db";

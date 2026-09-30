@@ -1,4 +1,4 @@
-// Portal API — staff token management + patient portal session/data (spec §141)
+// Portal API - staff token management + patient portal session/data (spec §141)
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ok, fail, parseBody, requireAuth } from "@/lib/api";

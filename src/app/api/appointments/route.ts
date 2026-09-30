@@ -1,4 +1,4 @@
-// Appointments API — list, create, status actions
+// Appointments API - list, create, status actions
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { createAppointment, appointmentCreateSchema, listAppointments, appointmentAction, type AppointmentAction } from "@/modules/scheduling";

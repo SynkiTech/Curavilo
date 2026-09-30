@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Curavilo — Healthcare Operating Platform",
+  title: "Curavilo - Healthcare Operating Platform",
   description:
     "Configurable, multi-tenant, AI-powered healthcare operating platform for hospitals, clinics, diagnostic centres, laboratories and pharmacies.",
   icons: {

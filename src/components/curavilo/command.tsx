@@ -1,6 +1,6 @@
 "use client";
 
-// Operations Command Center — metrics, anomaly alerts, bottlenecks (spec §139)
+// Operations Command Center - metrics, anomaly alerts, bottlenecks (spec §139)
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Gauge, Shuffle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ export function Command() {
               <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden /> Anomaly alerts
             </h2>
             {data.alerts.length === 0 ? (
-              <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-muted-foreground">No anomalies detected — operations look nominal.</p>
+              <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-muted-foreground">No anomalies detected - operations look nominal.</p>
             ) : (
               <ul className="space-y-2">
                 {data.alerts.map((a) => (

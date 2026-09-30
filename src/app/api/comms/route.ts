@@ -1,4 +1,4 @@
-// Communications API — message log, provider config, manual send (spec §62)
+// Communications API - message log, provider config, manual send (spec §62)
 import { z } from "zod";
 import { ok, fail, parseBody, requireAuth } from "@/lib/api";
 import { db } from "@/lib/db";

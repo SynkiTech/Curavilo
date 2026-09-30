@@ -1,4 +1,4 @@
-// Dashboard & reports modules — deterministic analytics (spec §32, §55)
+// Dashboard & reports modules - deterministic analytics (spec §32, §55)
 import { db } from "@/lib/db";
 import type { AuthContext } from "@/lib/auth";
 
@@ -12,8 +12,9 @@ function dayBounds(date = new Date()) {
 export async function dashboardStats(ctx: AuthContext) {
   const { start, end } = dayBounds();
   const profile = ctx.serviceProfileKey;
+  const trendStart = new Date(start.getTime() - 13 * 24 * 3600 * 1000);
 
-  const [patientsToday, waiting, called, inService, completedToday, appointmentsToday, revenueAgg, lowStockCount, overdueFollowUps, recentPayments] = await Promise.all([
+  const [patientsToday, waiting, called, inService, completedToday, appointmentsToday, revenueAgg, lowStockCount, overdueFollowUps, recentPayments, trendPayments, trendEncounters] = await Promise.all([
     db.patient.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, createdAt: { gte: start } } }),
     db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "WAITING" } }),
     db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "CALLED" } }),
@@ -34,6 +35,14 @@ export async function dashboardStats(ctx: AuthContext) {
       take: 6,
       include: { invoice: { include: { patient: true } } },
     }),
+    db.payment.findMany({
+      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null, createdAt: { gte: trendStart } },
+      select: { createdAt: true, amountMinor: true, method: true },
+    }),
+    db.encounter.findMany({
+      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, startedAt: { gte: trendStart } },
+      select: { startedAt: true },
+    }),
   ]);
 
   // Stock on hand vs reorder level
@@ -53,6 +62,23 @@ export async function dashboardStats(ctx: AuthContext) {
     take: 12,
   });
 
+  // 14-day trend series (UTC day buckets, zero-filled)
+  const days: string[] = [];
+  for (let i = 0; i < 14; i++) days.push(new Date(trendStart.getTime() + i * 24 * 3600 * 1000).toISOString().slice(0, 10));
+  const bucket = (iso: Date) => iso.toISOString().slice(0, 10);
+  const revenueByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  const revenueByMethod = new Map<string, number>();
+  for (const p of trendPayments) {
+    const d = bucket(p.createdAt);
+    revenueByDay.set(d, (revenueByDay.get(d) ?? 0) + p.amountMinor);
+    revenueByMethod.set(p.method, (revenueByMethod.get(p.method) ?? 0) + p.amountMinor);
+  }
+  const encountersByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  for (const e of trendEncounters) {
+    const d = bucket(e.startedAt);
+    encountersByDay.set(d, (encountersByDay.get(d) ?? 0) + 1);
+  }
+
   return {
     stats: {
       patientsToday,
@@ -68,6 +94,11 @@ export async function dashboardStats(ctx: AuthContext) {
     lowStock,
     queueSnapshot,
     recentPayments,
+    trends: {
+      revenueByDay: days.map((d) => ({ date: d, minor: revenueByDay.get(d) ?? 0 })),
+      encountersByDay: days.map((d) => ({ date: d, count: encountersByDay.get(d) ?? 0 })),
+      revenueByMethod: [...revenueByMethod.entries()].map(([method, minor]) => ({ method, minor })).sort((a, b) => b.minor - a.minor),
+    },
   };
 }
 

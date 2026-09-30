@@ -1,4 +1,4 @@
-// Patient detail API — patient 360 + update
+// Patient detail API - patient 360 + update
 import { ok, fail, requireAuth, parseBody, NotFound } from "@/lib/api";
 import { getPatient360, updatePatient, patientSchema } from "@/modules/patients";
 

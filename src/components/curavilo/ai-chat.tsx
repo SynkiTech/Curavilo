@@ -1,6 +1,6 @@
 "use client";
 
-// AI Assistant — grounded Q&A with provenance (spec §41–48)
+// AI Assistant - grounded Q&A with provenance (spec §41–48)
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Send, Sparkles, X, Database, ShieldAlert } from "lucide-react";
@@ -115,7 +115,7 @@ export function AIChat() {
     <div>
       <PageHeader
         title="AI Assistant"
-        subtitle="Ask about your facility's operational data — answers come from your records, with provenance."
+        subtitle="Ask about your facility's operational data - answers come from your records, with provenance."
         actions={<Button variant="outline" size="sm" onClick={newConversation}>New conversation</Button>}
       />
 
@@ -147,14 +147,14 @@ export function AIChat() {
             {aiPatientContext ? (
               <div className="flex items-center gap-2 border-b bg-teal-50/60 px-4 py-2 text-sm">
                 <Database className="h-4 w-4 text-teal-700" aria-hidden />
-                <span>Context: patient <strong>{aiPatientContext.name}</strong> — questions will be answered from their authorized records.</span>
+                <span>Context: patient <strong>{aiPatientContext.name}</strong> - questions will be answered from their authorized records.</span>
                 <Button variant="ghost" size="sm" className="ml-auto h-7 w-7 p-0" aria-label="Clear patient context" onClick={() => setAiPatientContext(null)}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
               <div className="border-b px-4 py-2 text-xs text-muted-foreground">
-                Context: <strong>{user.facilityName}</strong> · your permissions apply — the AI cannot access data beyond your role.
+                Context: <strong>{user.facilityName}</strong> · your permissions apply - the AI cannot access data beyond your role.
               </div>
             )}
 
@@ -258,7 +258,7 @@ function ProvenanceCard({ raw }: { raw: string }) {
       {provenance.period ? (
         <div>
           Period: {provenance.period.label ?? ""}
-          {provenance.period.from ? ` (${formatDate(provenance.period.from)} – ${formatDate(provenance.period.to ?? provenance.period.from)})` : ""}
+          {provenance.period.from ? ` (${formatDate(provenance.period.from)} to ${formatDate(provenance.period.to ?? provenance.period.from)})` : ""}
         </div>
       ) : null}
       {provenance.filters && Object.keys(provenance.filters).length > 0 ? (

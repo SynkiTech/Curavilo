@@ -1,4 +1,4 @@
-// AI ACT endpoint — executes a human-confirmed LOW-risk action (spec §50–51).
+// AI ACT endpoint - executes a human-confirmed LOW-risk action (spec §50–51).
 // The proposal always comes from the agent; execution only happens after the
 // user explicitly confirms in the UI, and is fully audited.
 import { z } from "zod";

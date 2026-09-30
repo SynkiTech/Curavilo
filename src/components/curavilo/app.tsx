@@ -1,6 +1,6 @@
 "use client";
 
-// Curavilo root — session boot, landing/onboarding/app-shell routing
+// Curavilo root - session boot, landing/onboarding/app-shell routing
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";

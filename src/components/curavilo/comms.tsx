@@ -1,6 +1,6 @@
 "use client";
 
-// Communications & Integrations — provider-neutral comms log, channel adapter
+// Communications & Integrations - provider-neutral comms log, channel adapter
 // config, webhook endpoints + delivery log (spec §62, §134, §140)
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -49,7 +49,7 @@ export function Comms() {
   const send = useMutation({
     mutationFn: () => apiSend("POST", "/api/comms", { action: "SEND", channel, recipient: recipient || null, subject: subject || null, body }),
     onSuccess: () => {
-      toast.success("Handed to the adapter — see the log below.");
+      toast.success("Handed to the adapter - see the log below.");
       queryClient.invalidateQueries({ queryKey: ["comms"] });
       setSendOpen(false); setBody(""); setSubject(""); setRecipient("");
     },
@@ -68,7 +68,7 @@ export function Comms() {
   const createHook = useMutation({
     mutationFn: () => apiSend<{ secret: string }>("POST", "/api/webhooks", { action: "CREATE", url: hookUrl, events: hookEvents.split(",").map((s) => s.trim()).filter(Boolean) }),
     onSuccess: (res) => {
-      toast.success("Endpoint created — signing secret shown once.");
+      toast.success("Endpoint created - signing secret shown once.");
       setLastSecret(res.secret);
       queryClient.invalidateQueries({ queryKey: ["webhooks"] });
       setHookOpen(false); setHookUrl("");
@@ -91,7 +91,7 @@ export function Comms() {
     <div>
       <PageHeader
         title="Communications & Integrations"
-        subtitle="Provider-neutral messaging (all vendors behind adapters — sandbox simulates delivery) and outbound webhooks with HMAC signatures."
+        subtitle="Provider-neutral messaging (all vendors behind adapters - sandbox simulates delivery) and outbound webhooks with HMAC signatures."
         actions={
           tab === "log"
             ? <Button size="sm" variant="outline" onClick={() => setSendOpen(true)}><Send className="mr-1.5 h-3.5 w-3.5" /> Send message</Button>
@@ -147,7 +147,7 @@ export function Comms() {
                     <TableRow key={m.id}>
                       <TableCell><Badge variant="outline" className="text-[10px]">{m.channel}</Badge></TableCell>
                       <TableCell className="text-xs">{m.type}</TableCell>
-                      <TableCell className="text-xs">{m.recipient ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{m.recipient ?? "-"}</TableCell>
                       <TableCell className="max-w-48 truncate text-xs text-muted-foreground">{m.subject ?? m.bodyPreview}</TableCell>
                       <TableCell><StatusBadge status={m.status === "SIMULATED" ? "COMPLETED" : m.status} /></TableCell>
                       <TableCell className="text-xs">{m.source}</TableCell>
@@ -167,7 +167,7 @@ export function Comms() {
           <div className="space-y-4">
             {lastSecret ? (
               <p className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
-                New endpoint secret (shown once — store it now): <code className="rounded bg-white px-1.5 py-0.5">{lastSecret}</code>
+                New endpoint secret (shown once - store it now): <code className="rounded bg-white px-1.5 py-0.5">{lastSecret}</code>
               </p>
             ) : null}
             {hooks.data?.endpoints.length === 0 ? (
@@ -205,7 +205,7 @@ export function Comms() {
                         <TableCell className="text-xs">{d.eventType}</TableCell>
                         <TableCell><StatusBadge status={d.status === "DELIVERED" ? "COMPLETED" : d.status === "DEAD" ? "FAILED" : "PENDING"} /></TableCell>
                         <TableCell className="text-xs">{d.attempts}</TableCell>
-                        <TableCell className="text-xs">{d.responseStatus ?? d.lastError ?? "—"}</TableCell>
+                        <TableCell className="text-xs">{d.responseStatus ?? d.lastError ?? "-"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{formatDateTime(d.createdAt)}</TableCell>
                       </TableRow>
                     ))}

@@ -6,10 +6,10 @@
 // lab → pharmacy), each with a lognormal-ish service time distribution and a
 // capacity (servers). Queue discipline is FIFO with urgent patients jumping
 // ahead. All stochastic output is reported as a median with a p10–p90 range
-// across seeds — never as a single guaranteed number.
+// across seeds - never as a single guaranteed number.
 //
 // Safety boundary (§59): operational planning ONLY. The engine never touches
-// patient-level clinical data (§60) — inputs are aggregate operational
+// patient-level clinical data (§60) - inputs are aggregate operational
 // parameters, outputs are queue/throughput statistics.
 
 export interface StationParams {
@@ -226,7 +226,7 @@ export function runSimulation(params: SimulationParams): SimulationResult {
     p90TotalWaitMin: percentile(totalWaits, 0.9),
     avgPatientsInSystem: Math.round((visits.filter((v) => !v.visitedAll && !v.dropped).length / Math.max(1, days)) * 10) / 10, // avg unresolved visits/day
     bottleneckKey: bottleneck?.key ?? "",
-    bottleneckLabel: bottleneck?.label ?? "—",
+    bottleneckLabel: bottleneck?.label ?? "-",
     seed: params.seed ?? 1,
   };
 }
@@ -307,7 +307,7 @@ export interface OperationalBaseline {
 
 /**
  * Derive baseline simulation parameters from aggregate queue/encounter data of
- * the last 14 days. Only aggregates (counts, means) leave the database — no
+ * the last 14 days. Only aggregates (counts, means) leave the database - no
  * patient-level data (§60).
  */
 export async function calibrateFromOperations(orgId: string, facilityId: string): Promise<OperationalBaseline> {

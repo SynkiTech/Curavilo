@@ -77,7 +77,7 @@ export async function registerOrganization(input: z.infer<typeof registerSchema>
         email: input.facility.email || null,
         logoData: input.facility.logoData || null,
         reportFooter: input.facility.reportFooter || `Thank you for choosing ${input.facility.name}.`,
-        receiptFooter: input.facility.receiptFooter || `Thank you for your visit — get well soon!`,
+        receiptFooter: input.facility.receiptFooter || `Thank you for your visit - get well soon!`,
         brandColor: input.facility.brandColor || null,
       },
     });

@@ -1,4 +1,4 @@
-// API helpers — consistent responses, typed errors, auth+permission guard (spec §71, §84, §87).
+// API helpers - consistent responses, typed errors, auth+permission guard (spec §71, §84, §87).
 import { NextResponse } from "next/server";
 import { ZodError, ZodSchema } from "zod";
 import { getAuth, type AuthContext } from "@/lib/auth";

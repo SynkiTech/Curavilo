@@ -1,6 +1,6 @@
 // Data import/export (spec §64–65, §140): CSV patients/inventory import with
 // inspect → map → validate → preview → transactional import → audit; audited
-// tenant-scoped CSV exports. Never imports silently — every row is validated
+// tenant-scoped CSV exports. Never imports silently - every row is validated
 // and reported before anything is written.
 
 import { db } from "@/lib/db";

@@ -1,4 +1,4 @@
-// FHIR export endpoint — /api/fhir/{Resource}?count=50 (read-only, auth'd, audited)
+// FHIR export endpoint - /api/fhir/{Resource}?count=50 (read-only, auth'd, audited)
 import { NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
 import { getAuth } from "@/lib/auth";
@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ reso
 }
 
 export async function POST() {
-  // Read-only export surface — writes are intentionally not supported.
+  // Read-only export surface - writes are intentionally not supported.
   return NextResponse.json(
     { resourceType: "OperationOutcome", issue: [{ severity: "error", code: "not-supported", diagnostics: "FHIR export is read-only." }] },
     { status: 405 },

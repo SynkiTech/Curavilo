@@ -1,6 +1,6 @@
 "use client";
 
-// Patient 360 — demographics + encounters + appointments + invoices + follow-ups + AI summary
+// Patient 360 - demographics + encounters + appointments + invoices + follow-ups + AI summary
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles, Loader2, CalendarPlus, ClipboardPlus } from "lucide-react";

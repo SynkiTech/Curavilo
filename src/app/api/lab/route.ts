@@ -1,4 +1,4 @@
-// Diagnostics API — lab + imaging orders lifecycle (spec §137)
+// Diagnostics API - lab + imaging orders lifecycle (spec §137)
 import { z } from "zod";
 import { ok, fail, parseBody, parseQuery, requireAuth } from "@/lib/api";
 import {

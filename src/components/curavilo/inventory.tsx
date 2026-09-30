@@ -1,6 +1,6 @@
 "use client";
 
-// Inventory — items, stock lots, receive/adjust, movement ledger (spec §22–23, §112)
+// Inventory - items, stock lots, receive/adjust, movement ledger (spec §22–23, §112)
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, PackagePlus, History, TriangleAlert, Plus } from "lucide-react";
@@ -90,7 +90,7 @@ export function Inventory() {
                         </span>
                       </TableCell>
                       <TableCell className="hidden text-right tabular-nums md:table-cell">{item.reorderLevel}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">{item.nextExpiry ? formatDate(item.nextExpiry, user?.timezone) : "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">{item.nextExpiry ? formatDate(item.nextExpiry, user?.timezone) : "-"}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatMoney(item.sellingPriceMinor, user?.currency)}</TableCell>
                       {canWrite ? (
                         <TableCell className="text-right">
@@ -230,7 +230,7 @@ function ReceiveDialog({ item, onOpenChange, onDone }: { item: InventoryItem | n
     <Dialog open={!!item} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Receive stock — {item?.name}</DialogTitle>
+          <DialogTitle>Receive stock - {item?.name}</DialogTitle>
           <DialogDescription>Creates a stock lot and a RECEIPT movement in the ledger.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -272,7 +272,7 @@ function MovementsDialog({ item, onOpenChange }: { item: InventoryItem | null; o
     <Dialog open={!!item} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Stock movements — {item?.name}</DialogTitle>
+          <DialogTitle>Stock movements - {item?.name}</DialogTitle>
           <DialogDescription>Append-only ledger: every quantity change is recorded.</DialogDescription>
         </DialogHeader>
         {isLoading ? <LoadingState /> : null}

@@ -1,4 +1,4 @@
-// Inventory API — items CRUD (create/list), receive/adjust, movements
+// Inventory API - items CRUD (create/list), receive/adjust, movements
 import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { createItem, itemSchema, listItems, receiveStock, receiveSchema, adjustStock, adjustSchema, listMovements } from "@/modules/inventory";

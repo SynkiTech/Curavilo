@@ -11,7 +11,7 @@ import { apiSend, ApiError, fetchSessionWithRetry, type SessionInfo } from "./ap
 import { useApp } from "./store";
 import { AnimatedBackground } from "./animated-bg";
 
-const NETWORK_PROBLEM = "Cannot reach the server right now — it may be starting up. Please wait a moment and try again.";
+const NETWORK_PROBLEM = "Cannot reach the server right now - it may be starting up. Please wait a moment and try again.";
 
 export function Landing({ onOpenOnboarding, onOpenPortal }: { onOpenOnboarding: () => void; onOpenPortal?: () => void }) {
   const [email, setEmail] = useState("");
@@ -25,7 +25,7 @@ export function Landing({ onOpenOnboarding, onOpenPortal }: { onOpenOnboarding: 
     setError(null);
     try {
       await apiSend("POST", "/api/auth", { action: "login", email, password });
-      // Retry the session read — transient drops used to surface as a bare
+      // Retry the session read - transient drops used to surface as a bare
       // "Could not sign in" even though authentication itself succeeded.
       let session: SessionInfo | null = null;
       try {
@@ -60,19 +60,19 @@ export function Landing({ onOpenOnboarding, onOpenPortal }: { onOpenOnboarding: 
             The operating platform for your healthcare facility.
           </h1>
           <p className="mt-3 text-teal-100/80">
-            Patients, appointments, queues, encounters, billing, pharmacy, documents and AI — one calm,
+            Patients, appointments, queues, encounters, billing, pharmacy, documents and AI - one calm,
             permission-aware system that adapts to your specialty.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-teal-100/75">
-            <li>· Configurable service profiles — eye clinics, dental, GP, diagnostics and more</li>
+            <li>· Configurable service profiles - eye clinics, dental, GP, diagnostics and more</li>
             <li>· Deterministic billing & inventory with auditable ledgers</li>
-            <li>· AI answers grounded in your own authorized data — never guessed</li>
+            <li>· AI answers grounded in your own authorized data - never guessed</li>
           </ul>
           <div className="mt-8 flex items-start gap-2 rounded-lg border border-white/20 bg-white/10 p-3 text-xs text-teal-50 backdrop-blur">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <div>
               <p className="font-medium">Demo accounts (synthetic data)</p>
-              <p className="mt-0.5">eyeclinic@curavilo.demo · gracefield@curavilo.demo — password <code className="rounded bg-white/15 px-1">Demo1234!</code></p>
+              <p className="mt-0.5">eyeclinic@curavilo.demo · gracefield@curavilo.demo - password <code className="rounded bg-white/15 px-1">Demo1234!</code></p>
             </div>
           </div>
         </div>
@@ -115,14 +115,14 @@ export function Landing({ onOpenOnboarding, onOpenPortal }: { onOpenOnboarding: 
             </Button>
             {onOpenPortal ? (
               <Button variant="ghost" className="w-full text-muted-foreground" onClick={onOpenPortal}>
-                <KeyRound className="mr-2 h-4 w-4" /> Patient portal — view my records
+                <KeyRound className="mr-2 h-4 w-4" /> Patient portal - view my records
               </Button>
             ) : null}
           </CardContent>
         </Card>
       </div>
       <footer className="relative z-10 pb-8 text-center text-xs text-white/50">
-        Curavilo · Synthetic demo data only — not for production clinical use without professional review.
+        Curavilo · Synthetic demo data only - not for production clinical use without professional review.
       </footer>
     </div>
   );

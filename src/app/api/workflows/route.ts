@@ -1,4 +1,4 @@
-// Workflows API — builder CRUD, publish, dry-run, runs, approvals (spec §133)
+// Workflows API - builder CRUD, publish, dry-run, runs, approvals (spec §133)
 import { z } from "zod";
 import { ok, fail, parseBody, requireAuth } from "@/lib/api";
 import { db } from "@/lib/db";

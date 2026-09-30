@@ -1,4 +1,4 @@
-// Auth API — register / login / logout / session (single entry, action-dispatched)
+// Auth API - register / login / logout / session (single entry, action-dispatched)
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { ok, fail, parseBody, AppError } from "@/lib/api";

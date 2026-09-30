@@ -1,7 +1,7 @@
 // FHIR R4 read-only mapping layer (spec §91, §140, ADR 0009).
 // Maps the canonical model to standard resources via pure functions. This is an
 // EXPORT surface only: tenant-scoped, permission-gated, audited, rate-limited
-// by take(). Licensing-sensitive terminology is not embedded — local codes only.
+// by take(). Licensing-sensitive terminology is not embedded - local codes only.
 
 import { db } from "@/lib/db";
 import type { AuthContext } from "@/lib/auth";

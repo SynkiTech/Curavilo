@@ -1,4 +1,4 @@
-// Dashboard API — role-aware overview stats
+// Dashboard API - role-aware overview stats
 import { ok, fail, requireAuth } from "@/lib/api";
 import { dashboardStats } from "@/modules/reports";
 

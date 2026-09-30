@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       return ok(result);
     }
     if (body.action === "COMMIT" && Array.isArray(body.rows)) {
-      // Rows must come from a preview this session — re-validate length only; server re-validates content shape.
+      // Rows must come from a preview this session - re-validate length only; server re-validates content shape.
       return ok(await commitPatientImport(ctx, body.rows.slice(0, 500)));
     }
     return ok({ error: "action must be PREVIEW or COMMIT." }, 400);
