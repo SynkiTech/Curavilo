@@ -1,0 +1,2214 @@
+# CURAVILO ENHANCEMENT
+
+## Multi-Level Facility Access, Personnel Accounts, Role-Based Dashboards and Permissions
+
+You are working inside the existing Curavilo healthcare SaaS codebase.
+
+Do NOT rebuild the application from scratch.
+
+First inspect the current implementation, architecture, authentication system, database schema, organization/facility model, roles, navigation, dashboards, permissions and existing onboarding flow.
+
+Then enhance the existing system to implement the requirements below while preserving existing functionality.
+
+The objective is to introduce a secure, production-quality personnel identity and role-based access architecture where every healthcare facility can create individual staff accounts and every staff member receives a dashboard and permissions based on their assigned role.
+
+---
+
+# 1. CORE REQUIREMENT
+
+After a healthcare organization/facility registers on Curavilo, the facility owner must be able to:
+
+1. Configure the facility.
+2. Register/add personnel/staff members.
+3. Assign each personnel member a role.
+4. Create or invite each personnel member's individual account.
+5. Give each personnel member their own login credentials.
+6. Control exactly what that personnel member can access.
+7. Allow every personnel member to access a dashboard customized for their assigned role.
+
+The owner is the highest-authority user within the facility.
+
+The owner must have access to all Curavilo functionality available to that facility.
+
+Every other user must only see and access the functionality permitted by their assigned role and permissions.
+
+---
+
+# 2. IMPORTANT AUTHENTICATION MODEL
+
+Implement a two-stage facility access experience.
+
+Conceptually:
+
+```text
+                 CURAVILO LOGIN
+                       ↓
+             FACILITY ACCESS GATE
+                       ↓
+              Staff / Personnel Gate
+                       ↓
+            Role-Specific Dashboard
+```
+
+However, treat the two stages correctly from a security perspective.
+
+The first stage identifies the facility/workspace.
+
+The second stage identifies the individual person and determines their authorization.
+
+The facility-level credential MUST NOT determine staff permissions.
+
+The individual personnel account MUST determine access.
+
+---
+
+# 3. STAGE ONE: FACILITY ACCESS GATEWAY
+
+Create a facility access gateway.
+
+The initial screen should allow the user to enter:
+
+```text
+Facility Email
+Facility Password
+```
+
+Example:
+
+```text
+┌──────────────────────────────────────┐
+│              CURAVILO                │
+│                                      │
+│        Access Your Facility          │
+│                                      │
+│ Facility Email                       │
+│ [________________________________]   │
+│                                      │
+│ Facility Password                    │
+│ [________________________________]   │
+│                                      │
+│           [Continue]                 │
+└──────────────────────────────────────┘
+```
+
+The facility password is a workspace/facility access credential.
+
+It is NOT the same thing as a staff member's personal password.
+
+Do not use the facility credential to assign permissions.
+
+Do not use the facility credential as the staff identity.
+
+---
+
+# 4. SECURITY REQUIREMENT FOR FACILITY CREDENTIALS
+
+Do not implement the facility credential as a plaintext password stored in the database.
+
+Use secure password hashing through the authentication system.
+
+Do not expose the facility password anywhere in the application.
+
+Only the facility owner should be allowed to:
+
+* create it
+* change it
+* reset it
+
+If the existing architecture uses an identity provider that does not support a shared facility credential cleanly, create a secure facility-access abstraction rather than compromising the main authentication architecture.
+
+Document the architectural decision.
+
+---
+
+# 5. STAGE TWO: PERSONNEL ACCESS GATEWAY
+
+After successful facility authentication, DO NOT automatically show the main application dashboard.
+
+Instead, display a second gateway for individual personnel authentication.
+
+Example:
+
+```text
+┌──────────────────────────────────────┐
+│       [FACILITY LOGO]               │
+│                                      │
+│     Access Your Staff Account        │
+│                                      │
+│ Name or Email                        │
+│ [________________________________]   │
+│                                      │
+│ Password                             │
+│ [________________________________]   │
+│                                      │
+│            [Sign In]                 │
+│                                      │
+│ Forgot Password?                     │
+└──────────────────────────────────────┘
+```
+
+The person may authenticate using:
+
+* email
+* username, if supported
+
+Do not require the user to literally enter their display name unless the system explicitly supports unique usernames.
+
+Prefer email/username over unrestricted name matching because names are not guaranteed to be unique.
+
+---
+
+# 6. STAFF ACCOUNTS
+
+Every staff member must have their own individual account.
+
+The facility owner can create personnel records containing at minimum:
+
+```text
+First Name
+Last Name
+Email
+Phone
+Professional Designation
+Role
+Department
+Service Line
+Employment Status
+Staff ID / Employee ID
+Profile Photo
+Password / Invitation State
+```
+
+Support:
+
+* active
+* inactive
+* suspended
+* invited
+* locked
+
+Do not delete historical staff records when a staff member leaves.
+
+Deactivate them instead.
+
+Historical records must retain their original creator/actor references.
+
+---
+
+# 7. STAFF ONBOARDING
+
+The owner should have a clear workflow:
+
+```text
+Owner Dashboard
+      ↓
+Staff / Personnel
+      ↓
+Add Staff
+      ↓
+Enter Staff Details
+      ↓
+Choose Role
+      ↓
+Choose Department
+      ↓
+Choose Service Line
+      ↓
+Create / Invite Account
+      ↓
+Staff Can Log In
+```
+
+Provide two secure account-creation approaches:
+
+### Option A: Invitation
+
+Preferred for production.
+
+Owner enters the staff member's email.
+
+Curavilo sends an invitation.
+
+The staff member establishes their own password.
+
+### Option B: Owner-created temporary password
+
+Useful for environments where invitation email may not be reliable.
+
+The owner can generate a temporary password.
+
+The staff member must be forced to change it at first login.
+
+Never display permanent passwords in logs.
+
+Never expose passwords after creation.
+
+Never store plaintext passwords.
+
+---
+
+# 8. OWNER ACCOUNT
+
+The facility owner must have a personal account.
+
+Do NOT make the shared facility credentials the owner's permanent identity.
+
+The owner should have:
+
+```text
+Facility Access
++
+Owner Personal Account
+```
+
+The owner's personal account should have the highest permission level.
+
+The owner can:
+
+* manage facility
+* manage staff
+* assign roles
+* modify permissions
+* configure services
+* configure departments
+* configure workflows
+* access patients where permitted by facility policy
+* access billing
+* access POS
+* access pharmacy
+* access inventory
+* access reports
+* use AI
+* access analytics
+* access simulation
+* access settings
+* manage branding
+* manage facility credentials
+* manage subscriptions/features
+* view audit logs
+
+The owner is the only built-in role with unrestricted facility-level administrative access.
+
+Do not create another ordinary staff role that automatically has the same privileges as OWNER.
+
+---
+
+# 9. ROLE-BASED DASHBOARDS
+
+After personnel authentication, Curavilo must determine the user's assigned role, facility, department, service line and permissions.
+
+Then dynamically load the correct dashboard.
+
+Conceptually:
+
+```text
+Facility Authentication
+        ↓
+Personnel Authentication
+        ↓
+Personnel Record
+        ↓
+Role
+        ↓
+Permissions
+        ↓
+Department / Service Profile
+        ↓
+Dashboard Configuration
+        ↓
+Role-Specific Dashboard
+```
+
+Do NOT simply hide buttons on the frontend.
+
+The server must independently enforce the same authorization.
+
+---
+
+# 10. EXAMPLE ROLE DASHBOARDS
+
+Create role-aware dashboards.
+
+These are examples, not rigid permanent layouts.
+
+## OWNER
+
+Full facility command center.
+
+Possible sections:
+
+* facility overview
+* patients
+* appointments
+* queues
+* staff
+* departments
+* billing
+* revenue
+* POS
+* pharmacy
+* inventory
+* laboratory
+* reports
+* workflows
+* automation
+* AI agent
+* analytics
+* simulation
+* settings
+* audit logs
+
+---
+
+# 11. ADMIN
+
+Do NOT automatically give ADMIN the same privileges as OWNER.
+
+Create a configurable administrative permission set.
+
+Possible access:
+
+* appointments
+* patient registration
+* staff administration where explicitly granted
+* departments
+* reports
+* operational settings
+* billing administration
+* inventory administration
+
+Sensitive owner-only operations must remain restricted.
+
+The OWNER can determine which administrative privileges are granted.
+
+---
+
+# 12. RECEPTIONIST DASHBOARD
+
+Typical functionality:
+
+* patient registration
+* patient search
+* appointment scheduling
+* appointment check-in
+* queue management
+* basic patient demographic access
+* communication
+* assigned tasks
+* relevant receipts/payments where permitted
+
+Do not expose:
+
+* unrestricted clinical notes
+* staff salaries
+* unrestricted inventory administration
+* organization-wide configuration
+* permissions management
+* audit administration
+
+---
+
+# 13. DOCTOR DASHBOARD
+
+Typical functionality:
+
+* assigned patients
+* appointments
+* consultation/encounter workspace
+* patient history
+* clinical records permitted by policy
+* vitals
+* orders
+* prescriptions
+* investigations
+* referrals
+* follow-ups
+* assigned tasks
+* relevant reports
+* AI patient/data assistant subject to permissions
+
+Do not automatically expose:
+
+* payroll
+* unrelated financial administration
+* staff management
+* permissions
+* unrelated facility configuration
+
+---
+
+# 14. NURSE DASHBOARD
+
+Typical functionality:
+
+* assigned patient queue
+* triage
+* vitals
+* nursing tasks
+* appointments
+* relevant encounter information
+* follow-up tasks
+* notifications
+* patient workflow status
+
+---
+
+# 15. OPHTHALMOLOGIST DASHBOARD
+
+For an eye clinic/service profile, an ophthalmologist may have access to:
+
+* eye patients
+* appointments
+* eye examinations
+* clinical encounters
+* ophthalmic assessments
+* relevant diagnostic information
+* treatment/procedure records
+* prescriptions
+* follow-ups
+* assigned workflows
+* relevant reports
+* AI assistant restricted to permitted data
+
+The exact specialty functionality must come from the service profile system already established in Curavilo.
+
+---
+
+# 16. OPTOMETRIST DASHBOARD
+
+For an eye clinic, support appropriate configurable access to:
+
+* patient queue
+* eye examination
+* visual acuity
+* refraction
+* relevant examination forms
+* prescriptions
+* follow-up
+* tasks
+* reports
+* permitted patient history
+
+Do not hard-code these into an eye-only application.
+
+They must be driven by the existing specialty/service profile architecture.
+
+---
+
+# 17. OPTICIAN DASHBOARD
+
+For facilities with optical services, support role-appropriate functionality such as:
+
+* optical prescriptions
+* spectacle/lens-related records where configured
+* optical inventory
+* optical sales where permitted
+* patient orders
+* assigned tasks
+* relevant POS functionality
+* printing of relevant documents and receipts
+
+Permissions must prevent access to unrelated clinical or administrative data.
+
+---
+
+# 18. DENTIST DASHBOARD
+
+For dental service profiles, provide role-specific access to configured features such as:
+
+* dental patients
+* appointments
+* dental encounters
+* dental examinations
+* configured dental forms
+* procedures
+* treatment plans
+* prescriptions
+* follow-up
+* relevant reports
+
+Again, use service-profile configuration rather than hard-coded UI branches everywhere.
+
+---
+
+# 19. PHARMACY STAFF DASHBOARD
+
+Typical functionality:
+
+* prescriptions
+* dispensing
+* medication/product search
+* pharmacy inventory
+* drug sales
+* POS
+* stock alerts
+* batches
+* expiry
+* assigned tasks
+* pharmacy reports
+* receipt printing
+
+Do not automatically expose full clinical records.
+
+---
+
+# 20. LAB STAFF DASHBOARD
+
+Typical functionality:
+
+* lab requests
+* sample collection
+* specimen tracking
+* laboratory worklist
+* result entry
+* result verification where authorized
+* turnaround-time information
+* lab reports
+* notifications
+* assigned tasks
+
+---
+
+# 21. BILLING STAFF DASHBOARD
+
+Typical functionality:
+
+* invoices
+* payments
+* outstanding balances
+* receipts
+* payment verification
+* cashier sessions
+* refunds subject to permission
+* financial reports allowed by role
+* print/PDF
+
+Do not provide unrestricted staff, clinical or configuration access.
+
+---
+
+# 22. INVENTORY STAFF DASHBOARD
+
+Typical functionality:
+
+* stock
+* receiving
+* transfers
+* adjustments where authorized
+* suppliers
+* expiry
+* low-stock alerts
+* stock reports
+* barcode workflows
+
+---
+
+# 23. DYNAMIC DASHBOARD ARCHITECTURE
+
+Do not create completely separate codebases or duplicated dashboards for every role.
+
+Create a reusable role-aware dashboard system.
+
+Concept:
+
+```text
+Dashboard Shell
+       ↓
+Role
+       ↓
+Permission Set
+       ↓
+Service Profile
+       ↓
+Department
+       ↓
+Allowed Modules
+       ↓
+Widgets / Navigation / Actions
+```
+
+Example configuration:
+
+```text
+ROLE: DOCTOR
+
+Allowed modules:
+- patients
+- appointments
+- encounters
+- clinical
+- prescriptions
+- investigations
+- follow-ups
+- reports
+- ai
+
+Dashboard widgets:
+- today's appointments
+- waiting patients
+- assigned patients
+- pending results
+- follow-ups
+- tasks
+```
+
+The same system should work for every role.
+
+---
+
+# 24. PERMISSION SYSTEM
+
+Do not make roles themselves the complete security system.
+
+Implement granular permissions.
+
+Example:
+
+```text
+patients.view
+patients.create
+patients.edit
+patients.export
+
+encounters.view
+encounters.create
+encounters.edit
+
+prescriptions.view
+prescriptions.create
+prescriptions.edit
+
+billing.view
+billing.create
+billing.refund
+
+inventory.view
+inventory.receive
+inventory.adjust
+
+staff.view
+staff.create
+staff.edit
+staff.deactivate
+
+reports.view
+reports.generate
+reports.export
+
+ai.query
+ai.patient_query
+ai.action
+
+workflow.view
+workflow.create
+workflow.edit
+workflow.publish
+
+settings.manage
+roles.manage
+audit.view
+```
+
+Roles map to permissions.
+
+The OWNER has all applicable permissions.
+
+Other roles receive selected permission sets.
+
+---
+
+# 25. CUSTOM ROLE SUPPORT
+
+The facility owner should eventually be able to create custom roles.
+
+Example:
+
+```text
+Senior Ophthalmic Nurse
+Optical Manager
+Front Desk Supervisor
+Laboratory Supervisor
+Medical Director
+Pharmacy Supervisor
+```
+
+A custom role should allow the owner to select permitted actions.
+
+Do not allow custom roles to bypass system-critical safeguards.
+
+Some permissions should remain permanently platform-protected.
+
+---
+
+# 26. ROLE + DEPARTMENT + SERVICE LINE
+
+A user's access should not rely only on role.
+
+Model:
+
+```text
+User
+ ├── Organization
+ ├── Facility
+ ├── Role
+ ├── Department
+ └── Service Line
+```
+
+For example:
+
+```text
+Jane Doe
+Role: Optometrist
+Facility: Main Clinic
+Department: Eye Clinic
+Service Line: Optometry
+```
+
+Another:
+
+```text
+John Doe
+Role: Doctor
+Facility: Main Clinic
+Department: General Practice
+Service Line: General Medicine
+```
+
+This enables more precise authorization.
+
+---
+
+# 27. FACILITY-SPECIFIC ACCESS
+
+A staff member assigned to Facility A must not automatically access Facility B.
+
+A multi-branch organization may have:
+
+```text
+Organization
+ ├── Lagos Facility
+ ├── Ibadan Facility
+ └── Abuja Facility
+```
+
+A staff account should only access facilities to which that staff member is explicitly assigned.
+
+The OWNER organization account may manage multiple facilities according to the organization's ownership model.
+
+---
+
+# 28. STAFF STATUS
+
+Support:
+
+```text
+INVITED
+ACTIVE
+INACTIVE
+SUSPENDED
+LOCKED
+TERMINATED
+```
+
+Inactive, suspended or terminated personnel cannot authenticate into the facility application.
+
+Historical records must remain intact.
+
+---
+
+# 29. PASSWORD MANAGEMENT
+
+Implement:
+
+* secure password hashing
+* password reset
+* forced password change for temporary passwords
+* password strength requirements
+* account lock/rate limiting where appropriate
+* secure session invalidation
+* logout
+* session expiration
+
+Do not:
+
+* store plaintext passwords
+* display passwords
+* email permanent passwords
+* log passwords
+* put passwords in URLs
+
+---
+
+# 30. STAFF FORGOT PASSWORD
+
+The personnel gateway should contain:
+
+> Forgot Password?
+
+The reset process must operate through a secure token flow.
+
+A staff member must not need access to the owner account just to reset their password.
+
+However, the owner should also be able to deactivate/reset access through the staff management console.
+
+---
+
+# 31. FACILITY LOGOUT VS STAFF LOGOUT
+
+Design sessions carefully.
+
+When staff logs out:
+
+* their individual authenticated session must terminate
+* their protected data must no longer be accessible
+
+For the facility gateway session, use an appropriate secure short-lived session/context mechanism.
+
+Do not leave an indefinitely valid facility authorization in the browser.
+
+On shared computers, provide a clear:
+
+> **Exit Facility**
+
+option that fully clears facility access context.
+
+This is important because multiple staff may use the same workstation during a shift.
+
+---
+
+# 32. SHARED COMPUTER EXPERIENCE
+
+Healthcare facilities may use shared reception, pharmacy, laboratory and nursing computers.
+
+Design for this.
+
+Support a clear session flow:
+
+```text
+Facility Access
+      ↓
+Staff Login
+      ↓
+Staff Dashboard
+      ↓
+Work
+      ↓
+Staff Logout
+      ↓
+Personnel Login Screen
+```
+
+The next employee must not inherit the previous employee's permissions or patient context.
+
+Clear sensitive client-side state during staff logout.
+
+---
+
+# 33. ACTIVE STAFF SWITCHING
+
+Optionally support:
+
+> Switch Staff
+
+But never switch users without re-authentication.
+
+Do not create an "instant switch" that bypasses authentication.
+
+---
+
+# 34. AI AGENT PERMISSIONS
+
+This requirement is extremely important.
+
+The AI agent must inherit the authenticated staff member's permissions.
+
+For example:
+
+A receptionist asks:
+
+> "Show me Dr. John's salary."
+
+The AI must reject the request because the user's permissions do not allow access.
+
+A doctor asks:
+
+> "Summarize this patient's latest encounters."
+
+The AI may retrieve permitted patient data.
+
+A pharmacy staff member asks:
+
+> "Show me all patients in the hospital."
+
+The AI must restrict the query according to the user's permissions.
+
+AI authorization must happen before data retrieval.
+
+Never rely on the AI prompt alone.
+
+---
+
+# 35. AI TOOL CONTEXT
+
+Every AI query must receive secure server-side context such as:
+
+```text
+organizationId
+facilityId
+userId
+role
+permissions
+department
+serviceLine
+```
+
+Do not accept these values blindly from the frontend.
+
+Derive them from the authenticated server-side session and database.
+
+Do not allow users to modify their own AI authorization context.
+
+---
+
+# 36. AUDIT LOGGING
+
+Log important staff-related events:
+
+* staff created
+* invitation created
+* invitation accepted
+* password reset initiated
+* account activated
+* account deactivated
+* role changed
+* department changed
+* service line changed
+* permission changed
+* staff login
+* staff logout where appropriate
+* failed authentication
+* privileged action
+* AI query involving sensitive data
+* AI action
+* report export
+* document print/reprint where already supported
+
+Do not store passwords or unnecessary sensitive data in the audit log.
+
+---
+
+# 37. OWNER STAFF MANAGEMENT SCREEN
+
+Create a polished staff management module.
+
+Example:
+
+```text
+STAFF
+
+[+ Add Staff]
+
+Search staff...
+Filter by:
+Role
+Department
+Service
+Status
+
+------------------------------------------------------
+Name          Role          Department       Status
+------------------------------------------------------
+Jane Doe      Optometrist   Eye Clinic       Active
+John Smith    Doctor        General Practice Active
+Mike Brown    Pharmacist    Pharmacy         Active
+Sarah James   Nurse         OPD              Active
+------------------------------------------------------
+```
+
+Clicking a staff member should open:
+
+```text
+Profile
+Role
+Department
+Service Line
+Permissions
+Account Status
+Activity
+Assigned Tasks
+Login History
+```
+
+The owner can edit permissions or deactivate the account subject to safeguards.
+
+---
+
+# 38. STAFF CREATION FORM
+
+Create:
+
+```text
+PERSONAL INFORMATION
+First Name
+Last Name
+Email
+Phone
+Staff ID
+
+PROFESSIONAL INFORMATION
+Role
+Department
+Service Line
+Professional designation
+
+ACCESS
+Account Status
+Invitation / Temporary Password
+
+PERMISSIONS
+Inherited from role
+Optional facility-specific overrides
+```
+
+Show an explicit explanation:
+
+> This role determines the staff member's default access to Curavilo.
+
+---
+
+# 39. ROLE PREVIEW
+
+Before creating the account, allow the owner to preview:
+
+> "What this staff member will be able to access"
+
+Example:
+
+```text
+Role: Optometrist
+
+Can access:
+✓ Patients
+✓ Appointments
+✓ Eye Examination
+✓ Refraction
+✓ Prescriptions
+✓ Follow-ups
+✓ Relevant reports
+✓ AI patient queries
+
+Cannot access:
+✕ Staff management
+✕ Payroll
+✕ Organization settings
+✕ Permission management
+✕ Unrelated facility financial administration
+```
+
+This makes permission assignment understandable to non-technical hospital owners.
+
+---
+
+# 40. DASHBOARD PERSONALIZATION
+
+The base dashboard should be role-aware.
+
+Within permitted boundaries, allow limited personalization:
+
+* widget visibility
+* widget ordering
+* preferred shortcuts
+
+Do not allow personalization to create unauthorized functionality.
+
+---
+
+# 41. NAVIGATION SECURITY
+
+Do not merely hide menu items.
+
+A user attempting to access:
+
+```text
+/admin/staff
+/settings/security
+/billing/refunds
+```
+
+through a direct URL must still receive a secure authorization response if they are not authorized.
+
+---
+
+# 42. SERVER-SIDE AUTHORIZATION
+
+Every protected page, action, API route and server operation must enforce authorization.
+
+Never assume:
+
+> "The button isn't visible, so it's secure."
+
+A malicious user can call the underlying endpoint directly.
+
+Protect:
+
+* pages
+* API routes
+* Server Actions
+* mutations
+* exports
+* file access
+* AI tools
+* reports
+* documents
+* workflows
+* settings
+
+---
+
+# 43. DATABASE AUTHORIZATION
+
+Where the current architecture supports it, enforce tenant isolation with PostgreSQL RLS as defense in depth.
+
+Do not depend only on application logic.
+
+Create automated security tests for:
+
+```text
+User A → Tenant A
+User B → Tenant B
+```
+
+Ensure User A cannot retrieve Tenant B data.
+
+Also test:
+
+```text
+Doctor → restricted financial record
+Receptionist → clinical note
+Pharmacist → HR record
+Staff → role configuration
+```
+
+All must be denied when unauthorized.
+
+---
+
+# 44. OWNER-ONLY FUNCTIONS
+
+Create an explicit owner permission boundary.
+
+At minimum, OWNER-only actions should include:
+
+* facility credentials
+* facility deletion/closure
+* organization administration
+* role management
+* permission management
+* high-level staff administration
+* subscription management
+* sensitive organization settings
+* complete audit access
+* full facility analytics
+* high-risk AI actions
+
+Do not give these capabilities merely because someone has a role named ADMIN.
+
+---
+
+# 45. EMERGENCY ACCESS
+
+Do not automatically implement "break glass" access.
+
+If emergency access is eventually required, design it as a separate audited workflow with:
+
+* explicit reason
+* elevated authorization
+* time limit
+* detailed logging
+* post-event review
+
+Do not build silent privilege escalation.
+
+---
+
+# 46. DATABASE CHANGES
+
+Before modifying the schema:
+
+1. Inspect existing Prisma schema.
+2. Identify current User/Organization/Facility/Role relationships.
+3. Reuse existing structures where possible.
+4. Avoid duplicate identity models.
+5. Plan migrations.
+6. Preserve existing data.
+7. Write migration tests.
+
+Do not create a second incompatible auth system beside the existing system.
+
+---
+
+# 47. RECOMMENDED DATA MODEL
+
+Adapt to the existing schema rather than blindly replacing it.
+
+The architecture should support concepts equivalent to:
+
+```text
+Organization
+
+Facility
+
+User
+
+UserFacilityMembership
+
+Role
+
+Permission
+
+RolePermission
+
+UserPermissionOverride
+
+Department
+
+ServiceLine
+
+StaffProfile
+
+StaffRoleAssignment
+
+StaffDepartmentAssignment
+
+StaffServiceLineAssignment
+
+FacilityCredential / FacilityAccessIdentity
+
+Invitation
+
+PasswordResetToken / AuthProviderReset
+
+Session / AccessContext
+
+AuditLog
+```
+
+If the current Supabase Auth user already represents the person, do not create duplicate passwords in the application database.
+
+Use Supabase Auth for personal authentication.
+
+Create only the additional domain entities needed to connect the authenticated identity to:
+
+* organization
+* facility
+* staff profile
+* role
+* permissions
+* department
+* service line
+
+---
+
+# 48. IMPORTANT AUTH ARCHITECTURAL WARNING
+
+Do NOT create a dangerous architecture where:
+
+```text
+facility_password
+```
+
+is passed around in frontend state and used as a persistent authorization token.
+
+Create a secure facility access context.
+
+The browser should receive only a secure, short-lived, server-verifiable session representation.
+
+Use secure cookies where appropriate.
+
+Use:
+
+* HttpOnly
+* Secure
+* SameSite
+* short expiry
+* session rotation where appropriate
+
+Never put sensitive auth secrets into localStorage by default.
+
+---
+
+# 49. FACILITY ACCESS CONTEXT
+
+Once the facility gate succeeds, establish a temporary facility context.
+
+That context means:
+
+> "This user has successfully passed the facility access gate for Facility X."
+
+It does NOT mean:
+
+> "This user is an administrator of Facility X."
+
+The staff authentication step resolves the actual person.
+
+Final authorization becomes:
+
+```text
+Facility Context
++
+Authenticated User
++
+Staff Membership
++
+Role
++
+Permissions
++
+Department
++
+Service Line
+```
+
+---
+
+# 50. PERSONAL ACCOUNT SECURITY
+
+The final authenticated application session must be associated with a specific staff user.
+
+Do not permit:
+
+```text
+Facility → Dashboard
+```
+
+without a personnel identity.
+
+There must be no ambiguity about which staff member is performing an operation.
+
+Every sensitive action must have a real user identity.
+
+---
+
+# 51. ROLE-BASED ROUTING
+
+After successful personnel authentication:
+
+```text
+OWNER → owner dashboard
+ADMIN → admin dashboard
+DOCTOR → doctor dashboard
+NURSE → nurse dashboard
+OPTOMETRIST → optometry dashboard
+PHARMACY → pharmacy dashboard
+LAB → laboratory dashboard
+RECEPTIONIST → reception dashboard
+...
+```
+
+But implement this through a central route/dashboard resolver.
+
+Do not create fragile `if role === ...` logic everywhere.
+
+---
+
+# 52. SERVICE-PROFILE INTERACTION
+
+The role system must work together with Curavilo's existing service profile system.
+
+Example:
+
+```text
+Facility:
+Eye Clinic
+
+Service Profile:
+Ophthalmology / Optometry
+```
+
+Then:
+
+```text
+Staff:
+Jane Doe
+
+Role:
+Optometrist
+
+Service Line:
+Optometry
+```
+
+Her dashboard should combine:
+
+```text
+ROLE PERMISSIONS
++
+EYE CLINIC SERVICE PROFILE
++
+HER FACILITY ASSIGNMENT
+```
+
+Another:
+
+```text
+Facility:
+Dental Clinic
+
+Staff:
+Michael Doe
+
+Role:
+Dentist
+
+Service Line:
+Dental
+```
+
+Different dashboard.
+
+Same application.
+
+---
+
+# 53. ROLE + SERVICE PROFILE MATRIX
+
+Create a configuration-driven model that answers:
+
+```text
+Can this role access this module?
+Can this role access this feature?
+Can this role access this data type?
+Can this role perform this action?
+Is this module enabled for this facility?
+Is this service available for this facility?
+```
+
+The final permission is effectively:
+
+```text
+Role Permission
+AND
+Facility Module Enabled
+AND
+Facility Assignment
+AND
+Service Profile Scope
+AND
+Record-Level Authorization
+```
+
+Do not simply check the role name.
+
+---
+
+# 54. PATIENT DATA ACCESS
+
+Do not assume all medical personnel have access to every patient.
+
+Where appropriate, support:
+
+* facility-level patient access
+* department-level access
+* service-line access
+* assigned-patient access
+
+Start with sensible defaults.
+
+Keep the model extensible.
+
+---
+
+# 55. TESTING REQUIREMENTS
+
+Create automated tests for every authorization layer.
+
+## Authentication
+
+Test:
+
+* wrong facility credentials
+* wrong staff credentials
+* inactive staff
+* suspended staff
+* wrong facility staff
+* password reset
+* temporary password
+* session expiration
+* logout
+
+## Authorization
+
+Test:
+
+* OWNER
+* ADMIN
+* DOCTOR
+* NURSE
+* RECEPTIONIST
+* PHARMACY
+* LAB
+* custom role
+
+## Tenant isolation
+
+Test cross-facility and cross-organization access.
+
+## UI
+
+Verify that each role sees the expected navigation and widgets.
+
+## Direct access
+
+Attempt protected URLs directly.
+
+The server must reject unauthorized access.
+
+---
+
+# 56. E2E PERSONNEL FLOW
+
+Automate this complete scenario:
+
+```text
+Create facility
+      ↓
+Owner registration
+      ↓
+Owner login
+      ↓
+Open Staff
+      ↓
+Add Optometrist
+      ↓
+Assign Eye Clinic
+      ↓
+Assign Optometry service
+      ↓
+Invite staff
+      ↓
+Accept invitation
+      ↓
+Set password
+      ↓
+Open Curavilo
+      ↓
+Facility login
+      ↓
+Personnel login
+      ↓
+Optometrist dashboard
+```
+
+Then test another role:
+
+```text
+Facility login
+      ↓
+Personnel login as Pharmacist
+      ↓
+Pharmacy dashboard
+```
+
+Verify that the pharmacist cannot access restricted clinical/admin functionality.
+
+---
+
+# 57. OWNER E2E FLOW
+
+Test:
+
+```text
+Facility login
+      ↓
+Owner personal login
+      ↓
+Owner dashboard
+      ↓
+Staff management
+      ↓
+Create staff
+      ↓
+Assign role
+      ↓
+Modify permission
+      ↓
+Deactivate staff
+      ↓
+Verify staff can no longer authenticate
+```
+
+---
+
+# 58. SHARED COMPUTER E2E FLOW
+
+Test:
+
+```text
+Staff A logs in
+→ performs work
+→ logs out
+
+Staff B logs in
+→ cannot see Staff A session
+→ cannot inherit Staff A permissions
+→ cannot access Staff A private context
+```
+
+This test is mandatory.
+
+---
+
+# 59. AI E2E AUTHORIZATION FLOW
+
+Test:
+
+```text
+Receptionist
+→ ask restricted question
+→ AI denied
+
+Doctor
+→ ask authorized patient question
+→ AI retrieves permitted data
+
+Pharmacist
+→ ask pharmacy question
+→ AI retrieves pharmacy data
+
+Tenant A User
+→ attempt Tenant B question
+→ denied
+```
+
+---
+
+# 60. AUDIT E2E FLOW
+
+Verify the system records:
+
+```text
+Staff created
+Role assigned
+Permission changed
+Staff login
+Staff logout
+Staff deactivated
+Privileged action
+AI query
+AI action
+```
+
+without logging passwords or unnecessary sensitive content.
+
+---
+
+# 61. UI REQUIREMENTS
+
+Create polished UI for:
+
+### Facility access
+
+* facility logo
+* facility name once resolved
+* email
+* password
+* forgot/reset mechanism appropriate to facility admin
+* clear errors
+
+### Personnel access
+
+* facility logo
+* facility name
+* personnel email/username
+* password
+* forgot password
+* clear error messages
+
+### Staff management
+
+* searchable table
+* filters
+* role badge
+* department
+* service line
+* status
+* actions
+
+### Staff profile
+
+* identity
+* professional information
+* role
+* permissions
+* department
+* service line
+* status
+* activity
+
+---
+
+# 62. SECURITY UX
+
+Do not reveal unnecessary information during authentication.
+
+For example, avoid overly specific errors like:
+
+> "That staff email exists but your password is wrong."
+
+Prefer safe authentication messaging.
+
+Rate-limit repeated failed attempts.
+
+Protect password reset flows from user enumeration.
+
+---
+
+# 63. ACCESSIBLE LOGIN
+
+Ensure both login gates support:
+
+* keyboard navigation
+* labels
+* accessible errors
+* password visibility toggle
+* focus management
+* mobile use
+* screen-reader compatibility
+
+---
+
+# 64. MIGRATION SAFETY
+
+The current Curavilo product already exists.
+
+Before implementation:
+
+1. Inspect current User schema.
+2. Inspect current authentication flow.
+3. Inspect current role implementation.
+4. Inspect current facility model.
+5. Inspect current organization model.
+6. Inspect current dashboards.
+7. Determine whether current roles are already represented.
+8. Preserve existing users.
+
+Create a safe migration path.
+
+Do not break existing authentication.
+
+If an existing role system is simplistic, migrate it carefully into the granular permission model.
+
+---
+
+# 65. BACKWARD COMPATIBILITY
+
+Existing owners and demo users must continue to function.
+
+Create migration/seed updates for existing demo data.
+
+Do not leave existing staff accounts unusable after migration.
+
+---
+
+# 66. DEMO DATA
+
+Create realistic synthetic data demonstrating:
+
+### Facility
+
+Example:
+
+```text
+Curavilo Eye Care Centre
+```
+
+### Staff
+
+```text
+Owner
+Ophthalmologist
+Optometrist
+Optician
+Nurse
+Receptionist
+Pharmacy Staff
+Billing Staff
+```
+
+Each user should have a distinct role.
+
+Demonstrate that each gets a different dashboard.
+
+Also include:
+
+### General Practice demo
+
+```text
+Owner
+Doctor
+Nurse
+Receptionist
+Billing
+```
+
+The architecture must work across service profiles.
+
+Use synthetic data only.
+
+---
+
+# 67. DASHBOARD EXAMPLES
+
+The developer should implement enough variation to prove the model works.
+
+Owner:
+
+```text
+Facility Overview
+Patients
+Revenue
+Appointments
+Staff
+Inventory
+Workflow Health
+AI
+Analytics
+Alerts
+```
+
+Doctor:
+
+```text
+Today's Appointments
+Waiting Patients
+My Patients
+Pending Results
+Follow-ups
+Tasks
+AI Assistant
+```
+
+Receptionist:
+
+```text
+Today's Appointments
+Patient Registration
+Queue
+Check-ins
+Tasks
+```
+
+Pharmacist:
+
+```text
+Prescriptions
+Dispensing
+Today's Sales
+Low Stock
+Expiry Alerts
+POS
+Tasks
+```
+
+Optometrist:
+
+```text
+Today's Eye Exams
+Waiting Patients
+Eye Examination
+Refraction
+Follow-ups
+Prescriptions
+Tasks
+```
+
+These should use reusable dashboard components.
+
+---
+
+# 68. COMMAND / SEARCH BEHAVIOR
+
+The global command/search system must also respect the user's role.
+
+A receptionist searching for "staff salary" should not receive a result.
+
+A pharmacist searching for another staff member's HR record should not receive it.
+
+An owner may see broader results.
+
+---
+
+# 69. EXPORT / PRINT PERMISSIONS
+
+The existence of a report does not automatically mean every staff member can print/export it.
+
+Authorization must apply to:
+
+* view
+* generate
+* print
+* download
+* export
+* reprint
+
+Example:
+
+A pharmacy worker may print a pharmacy receipt.
+
+They may not automatically export the entire organization's revenue report.
+
+---
+
+# 70. FILE/DOCUMENT PERMISSIONS
+
+The same role model must protect uploaded documents.
+
+A staff user should only access files associated with records they are authorized to access.
+
+---
+
+# 71. WORKFLOW PERMISSIONS
+
+The role model must control:
+
+* view workflow
+* create workflow
+* edit workflow
+* test workflow
+* publish workflow
+* execute privileged workflow actions
+
+The owner has full workflow administration.
+
+Other staff get only what their permissions allow.
+
+---
+
+# 72. AI ACTION PERMISSIONS
+
+The AI must not create a privilege escalation path.
+
+If a receptionist cannot:
+
+```text refund payment
+```
+
+through the normal UI/API, the AI must also be unable to perform that action.
+
+The rule must be:
+
+```text
+AI action permissions ⊆ normal application permissions
+```
+
+---
+
+# 73. FINAL ARCHITECTURE
+
+The resulting identity model should conceptually be:
+
+```text
+                    CURAVILO
+                       │
+                Organization
+                       │
+                    Facility
+                       │
+             Facility Access Gate
+                       │
+                  Staff Identity
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+            Role            Assignments
+             │            Department/Service
+             │                   │
+             └─────────┬─────────┘
+                       │
+                  Permissions
+                       │
+               Record Authorization
+                       │
+          ┌────────────┼────────────┐
+          ↓            ↓            ↓
+      Dashboard      Modules       AI
+          │            │            │
+          └────────────┼────────────┘
+                       ↓
+                Hospital Data
+```
+
+---
+
+# 74. IMPORTANT IMPLEMENTATION PRINCIPLE
+
+Do not implement this enhancement as a collection of frontend conditions like:
+
+```text
+if role === "doctor"
+```
+
+scattered throughout the application.
+
+Create reusable authorization abstractions.
+
+Examples conceptually:
+
+```text
+getCurrentUserContext()
+hasPermission()
+requirePermission()
+requireFacilityAccess()
+requireRole()
+requireFacilityMembership()
+getAccessibleModules()
+getDashboardConfiguration()
+```
+
+Use a centralized policy/authorization layer.
+
+---
+
+# 75. VERIFICATION BEFORE COMPLETION
+
+After implementation:
+
+Run:
+
+* lint
+* typecheck
+* unit tests
+* integration tests
+* E2E tests
+* authorization tests
+* tenant-isolation tests
+* AI permission tests
+* build
+
+Then visually inspect:
+
+* facility gateway
+* personnel gateway
+* owner dashboard
+* doctor dashboard
+* nurse dashboard
+* receptionist dashboard
+* eye-clinic role dashboards
+* pharmacy dashboard
+* staff management
+* role/permission UI
+
+Use browser automation where available.
+
+---
+
+# 76. ADVERSARIAL SECURITY REVIEW
+
+After implementation, create a dedicated security review.
+
+Ask:
+
+> Can a staff member manipulate facilityId?
+
+> Can a staff member change role in the browser?
+
+> Can a staff member modify userId?
+
+> Can a staff member call an owner-only endpoint directly?
+
+> Can the AI retrieve unauthorized information?
+
+> Can a deactivated employee continue using an old session?
+
+> Can Staff A inherit Staff B's session on a shared computer?
+
+> Can a facility user access another facility by changing URL parameters?
+
+> Can a user export a report they cannot normally view?
+
+> Can a staff member access documents belonging to another department?
+
+> Can a role override be escalated into OWNER?
+
+> Can a custom role gain protected platform permissions?
+
+Fix every discovered issue.
+
+Do not merely document vulnerabilities and leave them unresolved.
+
+---
+
+# 77. DEFINITION OF DONE
+
+This enhancement is complete only when:
+
+* Facility access gateway works.
+* Personnel access gateway works.
+* Staff have individual accounts.
+* Staff have secure individual passwords/authentication.
+* Owner can create and manage personnel.
+* Owner can assign roles.
+* Owner can assign department/service line.
+* Roles determine default permissions.
+* Permissions are enforced server-side.
+* Dashboards change according to role.
+* Service profiles influence the role dashboard.
+* Multi-facility access is isolated.
+* Staff deactivation works.
+* Password reset works.
+* Shared-device logout is safe.
+* AI respects personnel permissions.
+* Reports respect permissions.
+* Printing respects permissions.
+* Exports respect permissions.
+* Audit logging works.
+* Existing Curavilo users remain functional.
+* Cross-tenant security tests pass.
+* Build passes.
+* Typecheck passes.
+* Lint passes.
+* Critical E2E tests pass.
+
+---
+
+# 78. EXECUTION INSTRUCTIONS
+
+Do not begin by making broad UI changes.
+
+First:
+
+1. Inspect the existing Curavilo authentication system.
+2. Inspect the existing Prisma schema.
+3. Inspect current Organization/Facility/User/Role entities.
+4. Inspect existing onboarding.
+5. Inspect existing dashboards.
+6. Inspect existing permission checks.
+7. Inspect current Supabase integration.
+8. Identify the smallest safe architecture change.
+9. Create an implementation plan.
+10. Create/update the relevant architecture documentation and ADR.
+11. Implement the database layer.
+12. Implement authentication context.
+13. Implement authorization.
+14. Implement staff management.
+15. Implement role-aware routing.
+16. Implement role dashboards.
+17. Integrate service profiles.
+18. Integrate AI authorization.
+19. Add E2E/security tests.
+20. Verify the complete flow.
+
+Do not rewrite working parts of the application unnecessarily.
+
+Do not fake unfinished functionality.
+
+Do not hide broken features.
+
+When you encounter an architectural conflict with the existing Curavilo implementation, inspect the existing code and choose the safest backward-compatible approach, documenting the decision.
+
+The final result should feel like a natural evolution of Curavilo, not a disconnected authentication system bolted onto the product.
+
+The most important principle is:
+
+> **Every action inside Curavilo must have a clearly authenticated human identity, a clearly defined facility context, and a deterministically enforced permission boundary.**

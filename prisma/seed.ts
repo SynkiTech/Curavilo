@@ -29,14 +29,35 @@ async function clean() {
   // Child-first deletion keeps FK constraints happy.
   await db.aIMessage.deleteMany();
   await db.aIConversation.deleteMany();
+  await db.workflowRunNode.deleteMany();
   await db.workflowRun.deleteMany();
   await db.workflowDef.deleteMany();
+  await db.webhookDelivery.deleteMany();
+  await db.webhookEndpoint.deleteMany();
+  await db.providerConfig.deleteMany();
+  await db.communicationMessage.deleteMany();
   await db.outboxEvent.deleteMany();
   await db.notification.deleteMany();
+  await db.opsAlert.deleteMany();
+  await db.generatedDocument.deleteMany();
   await db.task.deleteMany();
   await db.auditEvent.deleteMany();
+  await db.diagnosticOrder.deleteMany();
+  await db.admission.deleteMany();
+  await db.bed.deleteMany();
+  await db.ward.deleteMany();
+  await db.referral.deleteMany();
+  await db.leaveRequest.deleteMany();
+  await db.staffCertification.deleteMany();
+  await db.portalToken.deleteMany();
+  await db.simulationScenario.deleteMany();
   await db.stockMovement.deleteMany();
   await db.stockLot.deleteMany();
+  await db.purchaseOrderItem.deleteMany();
+  await db.purchaseOrder.deleteMany();
+  await db.saleReturnItem.deleteMany();
+  await db.saleReturn.deleteMany();
+  await db.heldSale.deleteMany();
   await db.saleItem.deleteMany();
   await db.sale.deleteMany();
   await db.payment.deleteMany();
@@ -51,7 +72,14 @@ async function clean() {
   await db.patient.deleteMany();
   await db.inventoryItem.deleteMany();
   await db.session.deleteMany();
+  await db.passwordToken.deleteMany();
+  await db.permissionOverride.deleteMany();
+  await db.facilityMembership.deleteMany();
   await db.membership.deleteMany();
+  await db.customRole.deleteMany();
+  await db.department.deleteMany();
+  await db.gateSession.deleteMany();
+  await db.facilityCredential.deleteMany();
   await db.facility.deleteMany();
   await db.organization.deleteMany();
   await db.user.deleteMany();
@@ -80,22 +108,69 @@ async function main() {
     },
   });
 
-  const owner = await db.user.create({
-    data: { email: "eyeclinic@curavilo.demo", name: "Dr. Adaeze Okafor", passwordHash: hashPassword(PASSWORD) },
+  // Departments (spec §26/§38: staff belong to a department + service line)
+  const eyeDepartments: Record<string, string> = {};
+  for (const name of ["Optometry", "Ophthalmology", "Front Desk", "Pharmacy", "Accounts"]) {
+    const d = await db.department.create({ data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, name } });
+    eyeDepartments[name] = d.id;
+  }
+
+  // Facility access gate credential (stage 1 of the two-stage login)
+  await db.facilityCredential.create({
+    data: { orgId: eyeOrg.id, email: "eyeclinic@curavilo.demo", passwordHash: hashPassword(PASSWORD) },
   });
-  await db.membership.create({ data: { userId: owner.id, orgId: eyeOrg.id, role: "OWNER" } });
-  const receptionist = await db.user.create({
-    data: { email: "reception@curavilo.demo", name: "Chioma Eze", passwordHash: hashPassword(PASSWORD) },
+
+  const eyeRoster = [
+    { email: "eyeclinic@curavilo.demo", first: "Adaeze", last: "Okafor", role: "OWNER", dept: null, line: "EYE_CLINIC", designation: "MD, FWACS", code: "EYE-001", status: "ACTIVE", display: "Dr. Adaeze Okafor" },
+    { email: "ophthalmologist@curavilo.demo", first: "Chidi", last: "Bello", role: "OPHTHALMOLOGIST", dept: "Ophthalmology", line: "EYE_CLINIC", designation: "MBBS, FWO", code: "EYE-002", status: "ACTIVE", display: "Dr. Chidi Bello" },
+    { email: "optometrist@curavilo.demo", first: "Ifeanyi", last: "Nwosu", role: "OPTOMETRIST", dept: "Optometry", line: "Optometry", designation: "OD", code: "EYE-003", status: "ACTIVE", display: "Dr. Ifeanyi Nwosu" },
+    { email: "optician@curavilo.demo", first: "Ngozi", last: "Balogun", role: "OPTICIAN", dept: "Optometry", line: "Optics", designation: "Dispensing Optician", code: "EYE-004", status: "ACTIVE", display: "Ngozi Balogun" },
+    { email: "nurse@curavilo.demo", first: "Amina", last: "Yusuf", role: "NURSE", dept: "Ophthalmology", line: "EYE_CLINIC", designation: "RN, Ophthalmic", code: "EYE-005", status: "ACTIVE", display: "Amina Yusuf" },
+    { email: "reception@curavilo.demo", first: "Chioma", last: "Eze", role: "RECEPTIONIST", dept: "Front Desk", line: "Front Desk", designation: "Front Desk Officer", code: "EYE-006", status: "ACTIVE", display: "Chioma Eze" },
+    { email: "pharmacy@curavilo.demo", first: "Bola", last: "Ahmed", role: "PHARMACY", dept: "Pharmacy", line: "Pharmacy", designation: "BPharm", code: "EYE-007", status: "ACTIVE", display: "Bola Ahmed" },
+    { email: "billing@curavilo.demo", first: "Tunde", last: "Adeyemi", role: "BILLING", dept: "Accounts", line: "Finance", designation: "Accounts Officer", code: "EYE-008", status: "ACTIVE", display: "Tunde Adeyemi" },
+    { email: "supervisor@curavilo.demo", first: "Funke", last: "Olawale", role: "STAFF", dept: "Front Desk", line: "Front Desk", designation: "Supervisor", code: "EYE-009", status: "ACTIVE", display: "Funke Olawale", custom: "front-desk-supervisor" },
+    { email: "intern@curavilo.demo", first: "Emeka", last: "Obi", role: "STAFF", dept: "Optometry", line: "Optometry", designation: "Intern", code: "EYE-010", status: "SUSPENDED", display: "Emeka Obi" },
+  ] as const;
+
+  // Owner-defined custom role (spec §25): permissions chosen by the owner,
+  // protected permissions are stripped server-side.
+  const supervisorRole = await db.customRole.create({
+    data: {
+      orgId: eyeOrg.id,
+      name: "Front Desk Supervisor",
+      key: "front-desk-supervisor",
+      permissions: JSON.stringify([
+        "patients:read", "patients:write", "appointments:read", "appointments:write",
+        "queue:operate", "billing:read", "staff:read", "reports:read", "ai:ask",
+      ]),
+    },
   });
-  await db.membership.create({ data: { userId: receptionist.id, orgId: eyeOrg.id, role: "RECEPTIONIST" } });
-  const optometristUser = await db.user.create({
-    data: { email: "optometrist@curavilo.demo", name: "Dr. Ifeanyi Nwosu", passwordHash: hashPassword(PASSWORD) },
-  });
-  await db.membership.create({ data: { userId: optometristUser.id, orgId: eyeOrg.id, role: "DOCTOR" } });
-  const pharmacyUser = await db.user.create({
-    data: { email: "pharmacy@curavilo.demo", name: "Bola Ahmed", passwordHash: hashPassword(PASSWORD) },
-  });
-  await db.membership.create({ data: { userId: pharmacyUser.id, orgId: eyeOrg.id, role: "PHARMACY" } });
+
+  const eyeUsers: Record<string, string> = {};
+  for (const r of eyeRoster) {
+    const u = await db.user.create({
+      data: {
+        email: r.email, name: r.display, passwordHash: hashPassword(PASSWORD),
+        status: r.status,
+        firstName: r.first, lastName: r.last,
+        phone: "+234 80" + r.code.slice(4) + " 000 " + r.code.slice(4),
+        staffCode: r.code, designation: r.designation,
+        employmentStatus: r.status === "SUSPENDED" ? "CONTRACT" : "FULL_TIME",
+        serviceLine: r.line,
+        departmentId: r.dept ? eyeDepartments[r.dept] : null,
+      },
+    });
+    await db.membership.create({
+      data: { userId: u.id, orgId: eyeOrg.id, role: r.role, customRoleId: "custom" in r && r.custom ? supervisorRole.id : null },
+    });
+    await db.facilityMembership.create({ data: { userId: u.id, facilityId: eyeFacility.id } });
+    eyeUsers[r.role + (r.email.startsWith("supervisor") ? "-S" : "")] = u.id;
+  }
+  const owner = await db.user.findUniqueOrThrow({ where: { email: "eyeclinic@curavilo.demo" } });
+  const receptionist = await db.user.findUniqueOrThrow({ where: { email: "reception@curavilo.demo" } });
+  const optometristUser = await db.user.findUniqueOrThrow({ where: { email: "optometrist@curavilo.demo" } });
+  const pharmacyUser = await db.user.findUniqueOrThrow({ where: { email: "pharmacy@curavilo.demo" } });
 
   // Service catalogue (Eye Clinic profile)
   const catalogue = [
@@ -119,7 +194,7 @@ async function main() {
     data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, userId: optometristUser.id, name: "Dr. Ifeanyi Nwosu", designation: "OPTOMETRIST", department: "OPHTHALMOLOGY" },
   });
   const nurse = await db.staffMember.create({
-    data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, name: "Ngozi Balogun", designation: "NURSE", department: "OPHTHALMOLOGY" },
+    data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, name: "Amina Yusuf", designation: "NURSE", department: "OPHTHALMOLOGY" },
   });
 
   // Patients
@@ -363,10 +438,35 @@ async function main() {
       reportFooter: "Gracefield GMC - caring for you.", receiptFooter: "Get well soon!",
     },
   });
-  const gpOwner = await db.user.create({
-    data: { email: "gracefield@curavilo.demo", name: "Dr. Musa Ibrahim", passwordHash: hashPassword(PASSWORD) },
+  await db.facilityCredential.create({
+    data: { orgId: gpOrg.id, email: "gracefield@curavilo.demo", passwordHash: hashPassword(PASSWORD) },
   });
-  await db.membership.create({ data: { userId: gpOwner.id, orgId: gpOrg.id, role: "OWNER" } });
+  const gpDepartments: Record<string, string> = {};
+  for (const name of ["General Practice", "Nursing", "Front Desk", "Accounts"]) {
+    const d = await db.department.create({ data: { orgId: gpOrg.id, facilityId: gpFacility.id, name } });
+    gpDepartments[name] = d.id;
+  }
+  const gpRoster = [
+    { email: "gracefield@curavilo.demo", display: "Dr. Musa Ibrahim", first: "Musa", last: "Ibrahim", role: "OWNER", dept: null, line: "GENERAL_PRACTICE", designation: "MBBS, FWACP", code: "GMC-001", status: "ACTIVE" },
+    { email: "gp-doctor@curavilo.demo", display: "Dr. Halima Sule", first: "Halima", last: "Sule", role: "DOCTOR", dept: "General Practice", line: "General Medicine", designation: "MBBS", code: "GMC-002", status: "ACTIVE" },
+    { email: "gp-nurse@curavilo.demo", display: "Peter Eze", first: "Peter", last: "Eze", role: "NURSE", dept: "Nursing", line: "Nursing", designation: "RN", code: "GMC-003", status: "ACTIVE" },
+    { email: "gp-reception@curavilo.demo", display: "Ngozi Umeh", first: "Ngozi", last: "Umeh", role: "RECEPTIONIST", dept: "Front Desk", line: "Front Desk", designation: "Front Desk Officer", code: "GMC-004", status: "ACTIVE" },
+    { email: "gp-billing@curavilo.demo", display: "Sadiq Bello", first: "Sadiq", last: "Bello", role: "BILLING", dept: "Accounts", line: "Finance", designation: "Accounts Officer", code: "GMC-005", status: "ACTIVE" },
+  ] as const;
+  for (const r of gpRoster) {
+    const u = await db.user.create({
+      data: {
+        email: r.email, name: r.display, passwordHash: hashPassword(PASSWORD),
+        status: r.status, firstName: r.first, lastName: r.last,
+        staffCode: r.code, designation: r.designation, employmentStatus: "FULL_TIME",
+        serviceLine: r.line,
+        departmentId: r.dept ? gpDepartments[r.dept] : null,
+      },
+    });
+    await db.membership.create({ data: { userId: u.id, orgId: gpOrg.id, role: r.role } });
+    await db.facilityMembership.create({ data: { userId: u.id, facilityId: gpFacility.id } });
+  }
+  const gpOwner = await db.user.findUniqueOrThrow({ where: { email: "gracefield@curavilo.demo" } });
 
   const gpCatalogue = [
     { code: "CONS-GEN", name: "General Consultation", category: "CONSULTATION", priceMinor: 1500000 },
@@ -415,9 +515,9 @@ async function main() {
   });
 
   console.log("Seed complete.");
-  console.log("  Demo 1  Lagos Central Eye Clinic (EYE_CLINIC): eyeclinic@curavilo.demo");
-  console.log("          staff: reception@curavilo.demo (RECEPTIONIST), optometrist@curavilo.demo (DOCTOR), pharmacy@curavilo.demo (PHARMACY)");
-  console.log("  Demo 2  Gracefield General Medical Centre (GP): gracefield@curavilo.demo");
+  console.log("  Facility gate (stage 1): eyeclinic@curavilo.demo / gracefield@curavilo.demo");
+  console.log("  Eye Clinic staff (stage 2): ophthalmologist@ optometrist@ optician@ nurse@ reception@ pharmacy@ billing@ supervisor@ intern@ (SUSPENDED) curavilo.demo");
+  console.log("  GP staff (stage 2): gp-doctor@ gp-nurse@ gp-reception@ gp-billing@curavilo.demo");
   console.log(`  Password for all demo accounts: ${PASSWORD}`);
 }
 

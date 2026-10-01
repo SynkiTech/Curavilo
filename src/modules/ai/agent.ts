@@ -29,9 +29,14 @@ function checkRateLimit(userId: string): boolean {
 function systemPromptForPlan(ctx: AuthContext): string {
   const profile = getProfile(ctx.serviceProfileKey);
   const today = new Date().toISOString().slice(0, 10);
+  const staffContext = [
+    ctx.department ? `department: ${ctx.department}` : null,
+    ctx.serviceLine ? `service line: ${ctx.serviceLine}` : null,
+  ].filter(Boolean).join(", ");
   return `You are Curavilo AI, the data assistant for "${ctx.facilityName}" (${profile.name}).
 
 TODAY is ${today}. The facility's local timezone is ${ctx.timezone}.
+The signed-in staff member: role ${ctx.role}${staffContext ? ` (${staffContext})` : ""}. Their tool list is already restricted to what their role may access - never hint at tools beyond it.
 
 Your ONLY task in this phase is to plan how to answer the user's question. You have these data tools:
 

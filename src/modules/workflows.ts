@@ -704,5 +704,12 @@ export function systemContext(orgId: string, facilityId: string, currency = "NGN
     role: "SYSTEM",
     permissions: [],
     sessionId: "system",
+    status: "ACTIVE",
+    mustChangePassword: false,
+    department: null,
+    serviceLine: serviceProfileKey,
+    staffCode: null,
+    designation: null,
+    customRoleId: null,
   };
 }

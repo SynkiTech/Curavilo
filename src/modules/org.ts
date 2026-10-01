@@ -46,6 +46,7 @@ export async function registerOrganization(input: z.infer<typeof registerSchema>
   const slug = slugTaken ? `${baseSlug}-${Date.now().toString(36)}` : baseSlug;
 
   const profile = getProfile(input.facility.serviceProfileKey);
+  const nameParts = input.admin.name.trim().split(/\s+/);
 
   const org = await db.$transaction(async (tx) => {
     const org = await tx.organization.create({
@@ -61,10 +62,18 @@ export async function registerOrganization(input: z.infer<typeof registerSchema>
         email,
         name: input.admin.name,
         passwordHash: hashPassword(input.admin.password),
+        status: "ACTIVE",
+        firstName: nameParts[0] ?? null,
+        lastName: nameParts.length > 1 ? nameParts.slice(1).join(" ") : null,
       },
     });
     await tx.membership.create({
       data: { userId: user.id, orgId: org.id, role: "OWNER" },
+    });
+    // Facility access gate credential (ADR 0011): hashed, separate from the
+    // owner's personal credential, changeable independently by the owner.
+    await tx.facilityCredential.create({
+      data: { orgId: org.id, email, passwordHash: hashPassword(input.admin.password), updatedById: user.id },
     });
     const facility = await tx.facility.create({
       data: {
@@ -80,6 +89,10 @@ export async function registerOrganization(input: z.infer<typeof registerSchema>
         receiptFooter: input.facility.receiptFooter || `Thank you for your visit - get well soon!`,
         brandColor: input.facility.brandColor || null,
       },
+    });
+    // Owner spans every facility of the organization.
+    await tx.facilityMembership.create({
+      data: { userId: user.id, facilityId: facility.id },
     });
     // Seed the starter service catalogue for this profile
     await tx.serviceItem.createMany({
@@ -104,6 +117,16 @@ export async function registerOrganization(input: z.infer<typeof registerSchema>
     entityType: "Organization",
     entityId: org.org.id,
     summary: `Organization ${org.org.name} registered with facility ${org.facility.name} (${profile.name}).`,
+  });
+  await audit({
+    orgId: org.org.id,
+    facilityId: org.facility.id,
+    actorUserId: org.user.id,
+    actorLabel: org.user.name,
+    action: "facility.credential_created",
+    entityType: "FacilityCredential",
+    entityId: org.org.id,
+    summary: "Facility access credential created for the workspace gate.",
   });
 
   return { orgId: org.org.id, userId: org.user.id, facilityId: org.facility.id };

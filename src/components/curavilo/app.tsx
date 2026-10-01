@@ -20,7 +20,8 @@ import { POS } from "./pos";
 import { Inventory } from "./inventory";
 import { Reports } from "./reports";
 import { AIChat } from "./ai-chat";
-import { Workflows, Audit, Staff, FollowUps, Settings } from "./admin";
+import { Workflows, Audit, FollowUps, Settings } from "./admin";
+import { StaffConsole } from "./staff-console";
 import { Lab } from "./lab";
 import { Wards } from "./wards";
 import { Command } from "./command";
@@ -37,12 +38,25 @@ const queryClient = new QueryClient({
 export function CuraviloApp() {
   const { booted, session, route, setBooted, setSession, navigate } = useApp();
   const [portalOpen, setPortalOpen] = useState(false);
+  // One-time token screens land on "/" (single-route SPA): /?invite=... /?reset=...
+  const [tokenInfo, setTokenInfo] = useState<{ invite: string | null; reset: string | null }>({ invite: null, reset: null });
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get("invite");
+    const reset = params.get("reset");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (invite || reset) {
+      // Deferred so the boot render settles first (react-hooks rule).
+      timer = setTimeout(() => setTokenInfo({ invite, reset }), 0);
+      // Clean the address bar: one-time tokens never persist in history.
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     apiGet<SessionInfo>("/api/auth")
       .then(setSession)
       .catch(() => setSession({ authenticated: false }))
       .finally(() => setBooted(true));
+    return () => timer !== undefined && clearTimeout(timer);
   }, [setSession, setBooted]);
 
   if (!booted) {
@@ -63,7 +77,14 @@ export function CuraviloApp() {
     } else {
       screen = route.view === "onboarding"
         ? <Onboarding onBack={() => navigate("overview")} />
-        : <Landing onOpenOnboarding={() => navigate("onboarding")} onOpenPortal={() => setPortalOpen(true)} />;
+        : (
+          <Landing
+            onOpenOnboarding={() => navigate("onboarding")}
+            onOpenPortal={() => setPortalOpen(true)}
+            inviteToken={tokenInfo.invite}
+            resetToken={tokenInfo.reset}
+          />
+        );
     }
   } else {
     screen = (
@@ -106,7 +127,7 @@ function Screen() {
     case "myday": return <MyDay />;
     case "workflows": return <Workflows />;
     case "audit": return <Audit />;
-    case "staff": return <Staff />;
+    case "staff": return <StaffConsole />;
     case "followups": return <FollowUps />;
     case "settings": return <Settings />;
     default: return <Overview />;

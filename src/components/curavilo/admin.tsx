@@ -1,7 +1,7 @@
 "use client";
 
 // Admin views: Workflows (builder), Audit, Settings, Staff, Follow-ups
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Play, Plus, CircleCheck, CircleX, Wrench, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { apiGet, apiSend, formatMoney, formatDate, formatDateTime, type FollowUp
 import { LoadingState, ErrorState, EmptyState, PageHeader, StatusBadge } from "./ui-kit";
 import { WorkflowBuilderDialog, type BuilderInitial, type BuilderNode } from "./workflow-builder";
 
-import { useApp } from "./store";
+import { useApp, can } from "./store";
 import { toast } from "sonner";
 
 // ─── Workflows ──────────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ export function Audit() {
 
 // ─── Staff ──────────────────────────────────────────────────────────────────
 
-export function Staff() {
+export function ClinicalDirectory() {
   const { session } = useApp();
   const canManage = session?.user?.permissions.includes("staff:manage");
   const [open, setOpen] = useState(false);
@@ -554,8 +554,81 @@ export function Settings() {
               </ul>
             </CardContent>
           </Card>
+          {can("org:manage") ? <FacilityCredentialCard /> : null}
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Facility access credential (owner-only, ADR 0011) ─────────────────────
+
+function FacilityCredentialCard() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    apiGet<{ credentialEmail: string | null }>("/api/facility-credential")
+      .then((r) => { if (active) { setEmail(r.credentialEmail ?? ""); setLoading(false); } })
+      .catch(() => active && setLoading(false));
+    return () => { active = false; };
+  }, []);
+
+  const save = async () => {
+    if (password && password !== confirm) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiSend("PATCH", "/api/facility-credential", {
+        ...(email ? { email } : {}),
+        ...(password ? { password } : {}),
+      });
+      toast.success("Facility access credential updated.");
+      setPassword("");
+      setConfirm("");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-sm">Facility access credential</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          This is the workspace credential used at the facility access gate (step 1 of sign-in). It opens
+          the facility only - it never grants staff permissions. Owner-only, changeable at any time.
+        </p>
+        {loading ? <LoadingState /> : (
+          <>
+            <div className="space-y-1">
+              <Label htmlFor="cred-email">Facility gate email</Label>
+              <Input id="cred-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="cred-pass">New gate password</Label>
+                <Input id="cred-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cred-confirm">Confirm password</Label>
+                <Input id="cred-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              </div>
+            </div>
+            <Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={busy || (!password && !email)} onClick={() => void save()}>
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Update facility credential
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

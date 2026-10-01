@@ -137,3 +137,17 @@ Work Log:
 
 Stage Summary:
 - "Complete Sale" is now race-proof (per-org write lock + retry + friendly 503), and POS/Inventory are full supply-chain modules: sell with change calc, park/resume, receipt lookup/reprint, voids, partial returns with credit notes and restock, item edit/archive, dispose, stocktake, suppliers, purchase orders with partial receiving, valuation/expiry/low-stock reports. All under RBAC, audit + movement ledger.
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: Fix recurring React hydration mismatch from browser extension injecting bis_*/__processed_*__ attributes on every element
+
+Work Log:
+- Diagnosis: the user's extension (measurement/overlay tool) stamps bis_size/bis_status/bis_frame_id/bis_chainid/__processed_*__ attributes onto <body> AND every div between server HTML arrival and React hydration. The earlier Task 3 fix (suppressHydrationWarning on <body>) had also been lost from layout.tsx in a later edit, and single-element suppression cannot cover tree-wide injections anyway (Next's internal metadata div and app divs all mismatched).
+- Fix in src/app/layout.tsx: (1) restored suppressHydrationWarning on <body>; (2) added an inline pre-hydration cleanup script as the first child of <body>: it removes every attribute named bis_* or __processed_*__ from all elements, then keeps stripping them via a MutationObserver (attributes + added subtrees) so re-injections never survive to hydration. The script renders before the hydration bundle and is pure DOM hygiene, no user-visible effect.
+- Proof via scripts/hydration-ext-sim.js (global playwright, addInitScript extension simulation that tags all elements like the user's browser): A/B routed test. NO-FIX (cleanup disabled): 1 hydration mismatch error reproduced, 209 elements tagged, body bis_status=ok. WITH-FIX: 0 hydration issues, 0 bis-tagged elements in DOM after load (observer strips live injections). RESULT line: "reproduced 1 issue(s) without fix | FIX VERIFIED: clean hydration with fix".
+- Regression: tsc src/ 0 errors, eslint clean, normal (extension-less) load via agent-browser: landing renders, 0 page errors, 0 console errors.
+
+Stage Summary:
+- Hydration mismatch from browser-extension attribute injection is now impossible for this attribute family: the document is swept before hydration and continuously kept clean afterwards. Verified with a reproducible A/B simulation instead of relying on the flaky single-element suppression.

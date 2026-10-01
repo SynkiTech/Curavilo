@@ -1,4 +1,9 @@
-// RBAC - roles and granular permissions. Deny by default. (spec §16, §17)
+// RBAC - roles and granular permissions. Deny by default. (spec §16, §17, ADR 0011)
+//
+// Resolution order for a user's effective permission set (server-side, see src/lib/auth.ts):
+//   1. Built-in role defaults OR CustomRole.permissions (when membership.customRoleId is set)
+//   2. + per-user GRANT overrides   3. - per-user DENY overrides
+// PROTECTED_PERMISSIONS can never be added by custom roles or overrides - they are OWNER-only.
 
 export const PERMISSIONS = [
   "patients:read",
@@ -21,7 +26,9 @@ export const PERMISSIONS = [
   "staff:read",
   "staff:manage",
   "settings:manage",
-  // Phase 5–13 additions
+  "org:manage", // facility access credential, subscription, organization administration (OWNER-only)
+  "roles:manage", // custom roles + permission overrides (OWNER-only)
+  // Phase 5-13 additions
   "workflows:manage",
   "lab:operate", // order/specimen/result/verify/release diagnostics
   "inpatient:manage", // wards, beds, admissions, discharge
@@ -31,25 +38,36 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/** Platform-protected permissions: never grantable through custom roles or user overrides. */
+export const PROTECTED_PERMISSIONS: ReadonlySet<string> = new Set(["org:manage", "roles:manage"]);
+
 export const ROLES = [
   "OWNER",
   "ADMIN",
   "RECEPTIONIST",
   "NURSE",
   "DOCTOR",
+  "OPHTHALMOLOGIST",
+  "OPTOMETRIST",
+  "OPTICIAN",
+  "DENTIST",
   "LAB",
   "PHARMACY",
   "BILLING",
+  "INVENTORY",
   "STAFF",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
 
 const ALL: Permission[] = [...PERMISSIONS];
+// ADMIN is deliberately NOT the OWNER set (spec §11/§44): the two protected
+// owner-only permissions stay out, everything administrative is granted.
+const ADMIN: Permission[] = ALL.filter((p) => !PROTECTED_PERMISSIONS.has(p));
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   OWNER: ALL,
-  ADMIN: ALL,
+  ADMIN,
   RECEPTIONIST: [
     "patients:read", "patients:write",
     "appointments:read", "appointments:write",
@@ -79,6 +97,42 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "inpatient:manage",
     "ai:ask",
   ],
+  OPHTHALMOLOGIST: [
+    "patients:read",
+    "appointments:read",
+    "queue:operate",
+    "encounters:read", "encounters:write",
+    "billing:read",
+    "reports:read",
+    "lab:operate",
+    "inpatient:manage",
+    "ai:ask",
+  ],
+  OPTOMETRIST: [
+    "patients:read",
+    "appointments:read",
+    "queue:operate",
+    "encounters:read", "encounters:write",
+    "reports:read",
+    "ai:ask",
+  ],
+  OPTICIAN: [
+    "patients:read",
+    "appointments:read",
+    "inventory:read", "inventory:write",
+    "pos:sell",
+    "billing:read",
+  ],
+  DENTIST: [
+    "patients:read",
+    "appointments:read",
+    "queue:operate",
+    "encounters:read", "encounters:write",
+    "billing:read",
+    "reports:read",
+    "lab:operate",
+    "ai:ask",
+  ],
   LAB: [
     "patients:read",
     "encounters:read",
@@ -90,6 +144,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "inventory:read", "inventory:write",
     "pos:sell", "pos:refund",
     "billing:read",
+    "reports:read",
   ],
   BILLING: [
     "patients:read",
@@ -98,12 +153,20 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "reports:read",
     "ai:ask",
   ],
+  INVENTORY: [
+    "inventory:read", "inventory:write",
+    "reports:read",
+  ],
   STAFF: ["patients:read"],
 };
 
 export function permissionsForRole(role: string): Permission[] {
   const perms = ROLE_PERMISSIONS[role as Role];
   return perms ? [...perms] : [];
+}
+
+export function isBuiltinRole(role: string): boolean {
+  return (ROLES as readonly string[]).includes(role);
 }
 
 export function hasPermission(role: string, permission: Permission): boolean {
@@ -134,3 +197,11 @@ export const MODULE_PERMISSION: Record<string, Permission> = {
   audit: "audit:read",
   settings: "settings:manage",
 };
+
+export const STAFF_STATUSES = ["INVITED", "ACTIVE", "INACTIVE", "SUSPENDED", "LOCKED", "TERMINATED"] as const;
+export type StaffStatus = (typeof STAFF_STATUSES)[number];
+
+/** Statuses that may authenticate. Everything else is locked out of the personnel gate. */
+export function canAuthenticate(status: string): boolean {
+  return status === "ACTIVE";
+}

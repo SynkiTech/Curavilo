@@ -21,11 +21,41 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  facilities  Facility[]
-  memberships Membership[]
-  sessions    Session[]
+  facilities        Facility[]
+  memberships       Membership[]
+  sessions          Session[]
+  facilityCredential FacilityCredential?
+  gateSessions      GateSession[]
+  customRoles       CustomRole[]
+  departments       Department[]
 
   @@index([name])
+}
+
+// Facility access gate credential (ADR 0011). Workspace access only - never an authorization identity.
+model FacilityCredential {
+  id           String   @id @default(cuid())
+  orgId        String   @unique
+  email        String   @unique
+  passwordHash String
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+// Short-lived, sliding-TTL server context: "this browser passed the facility gate". Zero permissions.
+model GateSession {
+  id        String   @id @default(cuid())
+  orgId     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model Facility {
@@ -46,12 +76,27 @@ model Facility {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  staff   StaffMember[]
-  users   Session[]    @relation("SessionActiveFacility")
+  org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  staff          StaffMember[]
+  users          Session[]            @relation("SessionActiveFacility")
+  memberships    FacilityMembership[]
 
   @@index([orgId])
   @@index([orgId, serviceProfileKey])
+}
+
+// Facility-level assignment: a user may only open facilities they are assigned to (ADR 0011).
+model FacilityMembership {
+  id         String   @id @default(cuid())
+  userId     String
+  facilityId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, facilityId])
+  @@index([facilityId])
 }
 
 model User {
@@ -60,26 +105,117 @@ model User {
   name            String
   passwordHash    String
   isPlatformAdmin Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // Personnel identity fields (ADR 0011)
+  status            String    @default("ACTIVE") // INVITED ACTIVE INACTIVE SUSPENDED LOCKED TERMINATED
+  firstName         String?
+  lastName          String?
+  phone             String?
+  staffCode         String?   // employee ID, unique per org
+  designation       String?   // professional designation
+  employmentStatus  String?   // FULL_TIME PART_TIME CONTRACT LOCUM
+  serviceLine       String?   // service profile key assignment
+  photoData         String?
+  departmentId      String?
+  mustChangePassword Boolean  @default(false)
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+  passwordSetAt     DateTime  @default(now())
+  dashboardPrefs    String?   // JSON widget personalization (ADR 0011 §7)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  memberships Membership[]
-  sessions    Session[]
+  memberships         Membership[]
+  sessions            Session[]
+  department          Department?           @relation(fields: [departmentId], references: [id])
+  overrides           PermissionOverride[]
+  passwordTokens      PasswordToken[]
+  facilityMemberships FacilityMembership[]
+
+  @@index([status])
+  @@index([departmentId])
 }
 
 model Membership {
-  id        String  @id @default(cuid())
-  userId    String
-  orgId     String
-  role      String // OWNER | ADMIN | RECEPTIONIST | NURSE | DOCTOR | LAB | PHARMACY | BILLING | STAFF
-  active    Boolean @default(true)
-  createdAt DateTime @default(now())
+  id           String  @id @default(cuid())
+  userId       String
+  orgId        String
+  role         String // built-in role key (see src/lib/rbac.ts)
+  customRoleId String? // custom role assignment (ADR 0011)
+  active       Boolean @default(true)
+  createdAt    DateTime @default(now())
 
-  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customRole CustomRole?  @relation(fields: [customRoleId], references: [id])
 
   @@unique([userId, orgId])
   @@index([orgId])
+  @@index([customRoleId])
+}
+
+// Owner-defined role with a selected permission set. Protected permissions are stripped on write.
+model CustomRole {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  key         String
+  permissions String // JSON array of permission keys
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+
+  @@unique([orgId, key])
+}
+
+// Per-user permission deltas: role defaults + GRANT - DENY. Protected permissions are not grantable.
+model PermissionOverride {
+  id         String   @id @default(cuid())
+  orgId      String
+  userId     String
+  permission String
+  effect     String   // GRANT | DENY
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+  @@index([orgId])
+}
+
+// Departments for staff organization (per facility or org-wide).
+model Department {
+  id         String   @id @default(cuid())
+  orgId      String
+  facilityId String?
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  users  User[]
+
+  @@unique([orgId, name])
+}
+
+// Single-use hashed tokens for staff invitations (INVITE) and password resets (RESET).
+model PasswordToken {
+  id        String    @id @default(cuid())
+  orgId     String
+  userId    String
+  kind      String // INVITE | RESET
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Session {

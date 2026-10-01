@@ -14,6 +14,15 @@ export interface SessionUser {
   currency: string;
   timezone: string;
   permissions: string[];
+  status?: string;
+  mustChangePassword?: boolean;
+  department?: string | null;
+  serviceLine?: string | null;
+  staffCode?: string | null;
+  designation?: string | null;
+  customRoleId?: string | null;
+  photoData?: string | null;
+  dashboardPrefs?: string | null;
 }
 
 export interface FacilityOption {
@@ -23,10 +32,21 @@ export interface FacilityOption {
   type: string;
 }
 
+/** Stage-1 context: this browser passed the facility access gate (no permissions). */
+export interface GateInfo {
+  orgId: string;
+  orgName: string;
+  facilityName: string;
+  logoData?: string | null;
+  credentialEmail?: string | null;
+  expiresAt?: string;
+}
+
 export interface SessionInfo {
   authenticated: boolean;
   user?: SessionUser;
   facilities?: FacilityOption[];
+  gate?: GateInfo;
   branding?: {
     logoData?: string | null;
     address?: string | null;

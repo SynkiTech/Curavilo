@@ -1,17 +1,22 @@
 "use client";
 
-// App shell: dark-gradient sidebar navigation, facility switcher, global search, user menu
+// App shell: dark-gradient sidebar navigation, facility switcher, global search, user menu.
+// Shared-computer safe: Sign out returns to the personnel gate; Exit Facility clears everything.
 import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Users, CalendarDays, ListOrdered, ClipboardPlus, ReceiptText, ShoppingCart,
   Boxes, BarChart3, Sparkles, Workflow as WorkflowIcon, ScrollText, UserCog, Settings, Bell,
-  Search, LogOut, HeartPulse, ChevronsUpDown, Check,
+  Search, LogOut, HeartPulse, ChevronsUpDown, Check, DoorOpen, ArrowLeftRight,
   FlaskConical, BedDouble, Gauge, Shuffle, MessageSquareText, DatabaseBackup, CalendarCheck2,
+  KeyRound, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiGet, apiSend, type Patient } from "./api";
 import { can, useApp, type ViewName } from "./store";
 import { MODULE_PERMISSION } from "@/lib/rbac";
@@ -95,9 +100,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
+  const refreshSession = async () => {
+    const fresh = await apiGet<typeof session>("/api/auth").catch(() => null);
+    setSession(fresh ?? { authenticated: false });
+  };
+
+  // Staff sign-out: individual session dies, facility gate stays for the next
+  // person on this shared workstation (spec §32). Client state is cleared.
   const logout = async () => {
     await apiSend("POST", "/api/auth", { action: "logout" }).catch(() => undefined);
     setSession({ authenticated: false });
+    navigate("overview");
+  };
+
+  // Exit Facility: full clear of gate + staff session + client state.
+  const exitFacility = async () => {
+    await apiSend("POST", "/api/auth", { action: "exit-facility" }).catch(() => undefined);
+    setSession({ authenticated: false });
+    navigate("overview");
   };
 
   const switchFacility = async (facilityId: string) => {
@@ -159,13 +179,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-2.5 text-[11px] text-teal-100/70 backdrop-blur">
         <div className="font-semibold text-teal-50">{user.name}</div>
-        <div>{user.role} · {session?.facilities?.length ?? 1} facility{(session?.facilities?.length ?? 1) > 1 ? "s" : ""}</div>
+        <div>{user.role}{user.department ? ` · ${user.department}` : ""}</div>
+        <div>{user.orgName} · {session?.facilities?.length ?? 1} facility{(session?.facilities?.length ?? 1) > 1 ? "s" : ""}</div>
       </div>
     </nav>
   );
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-stone-50 via-teal-50/40 to-cyan-50/30">
+      {user.mustChangePassword ? <MustChangePasswordDialog onDone={() => void refreshSession()} /> : null}
       {/* Desktop sidebar: dark gradient for a clear color identity against the light workspace */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 bg-gradient-to-b from-[#042f2b] via-[#073f3c] to-[#0b3550] lg:block">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-cyan-400/10 to-transparent" aria-hidden />
@@ -242,10 +264,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuLabel>
                   <div className="text-sm">{user.name}</div>
                   <div className="text-xs font-normal text-muted-foreground">{user.email}</div>
+                  <div className="mt-1 text-[11px] font-normal text-muted-foreground">
+                    {user.role}{user.designation ? ` · ${user.designation}` : ""}{user.staffCode ? ` · ID ${user.staffCode}` : ""}
+                  </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => void logout()}>
+                  <ArrowLeftRight className="mr-2 h-4 w-4" /> Switch staff
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void logout()}>
                   <LogOut className="mr-2 h-4 w-4" /> Sign out
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50" onClick={() => void exitFacility()}>
+                  <DoorOpen className="mr-2 h-4 w-4" /> Exit facility
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -315,5 +347,85 @@ function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         ) : null}
       </CommandList>
     </CommandDialog>
+  );
+}
+
+// Blocking forced password change (spec §7): owner-created temporary passwords
+// must be replaced before the account can be used. Server APIs independently
+// reject everything until mustChangePassword is cleared (403 must_change_password).
+function MustChangePasswordDialog({ onDone }: { onDone: () => void }) {
+  const { setSession } = useApp();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (next !== confirm) {
+      setError("New passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await apiSend("POST", "/api/auth", { action: "change-password", currentPassword: current, newPassword: next });
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      onDone();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open>
+      <DialogContent
+        className="sm:max-w-sm"
+        showCloseButton={false}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-teal-700" aria-hidden /> Change your password
+          </DialogTitle>
+          <DialogDescription>
+            Your account uses a temporary password. Choose a new one (8+ characters with a letter and a number) to continue.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy) void submit();
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-current">Temporary password</Label>
+            <Input id="mcp-current" type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-next">New password</Label>
+            <Input id="mcp-next" type="password" autoComplete="new-password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mcp-confirm">Confirm new password</Label>
+            <Input id="mcp-confirm" type="password" autoComplete="new-password" required minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          </div>
+          {error ? (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>
+          ) : null}
+          <DialogFooter>
+            <Button type="submit" className="w-full bg-teal-700 hover:bg-teal-800" disabled={busy}>
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save password and continue
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

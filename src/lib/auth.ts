@@ -1,11 +1,16 @@
-// Auth - scrypt passwords + DB-backed opaque sessions (ADR 0005).
+// Auth - scrypt passwords + DB-backed opaque sessions (ADR 0005) + two-stage
+// facility access gate (ADR 0011). Stage 1 issues a permissionless GateSession
+// ("this browser passed the facility gate for org X"); stage 2 resolves the
+// individual staff identity and issues the real application session.
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { hasPermission, permissionsForRole, type Permission } from "@/lib/rbac";
+import { permissionsForRole, PROTECTED_PERMISSIONS, PERMISSIONS, type Permission } from "@/lib/rbac";
 
 const SESSION_COOKIE = "curavilo_session";
+const GATE_COOKIE = "curavilo_gate";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const GATE_TTL_MS = 30 * 60 * 1000; // short-lived, sliding on use (shared-computer safe)
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -21,9 +26,18 @@ export function verifyPassword(password: string, stored: string): boolean {
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
 }
 
+/** Password policy: 8+ chars with at least one letter and one digit. */
+export function passwordPolicyError(password: string): string | null {
+  if (password.length < 8 || password.length > 100) return "Password must be 8 to 100 characters.";
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) return "Password must include at least one letter and one number.";
+  return null;
+}
+
 function tokenToHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
+
+// ─── Application (staff) session ────────────────────────────────────────────
 
 export async function createSession(userId: string, orgId: string | null): Promise<string> {
   const token = randomBytes(32).toString("hex");
@@ -51,6 +65,87 @@ export async function destroySession(): Promise<void> {
   jar.delete(SESSION_COOKIE);
 }
 
+/** Invalidate every session of a user (deactivation, suspension, password reset). */
+export async function destroyUserSessions(userId: string): Promise<void> {
+  await db.session.deleteMany({ where: { userId } });
+}
+
+// ─── Facility gate session (stage 1) ────────────────────────────────────────
+
+export async function createGateSession(orgId: string): Promise<void> {
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + GATE_TTL_MS);
+  await db.gateSession.create({ data: { orgId, tokenHash: tokenToHash(token), expiresAt } });
+  const jar = await cookies();
+  jar.set(GATE_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production" && process.env.SANDBOX !== "1",
+    path: "/",
+    maxAge: GATE_TTL_MS / 1000,
+  });
+}
+
+/** Resolve + slide the gate session. Returns the gated org, or null. */
+export async function getGate(): Promise<{ orgId: string; orgName: string; expiresAt: Date } | null> {
+  const jar = await cookies();
+  const token = jar.get(GATE_COOKIE)?.value;
+  if (!token) return null;
+  const gate = await db.gateSession.findUnique({
+    where: { tokenHash: tokenToHash(token) },
+    include: { org: { select: { name: true } } },
+  });
+  if (!gate || gate.expiresAt < new Date()) return null;
+  const expiresAt = new Date(Date.now() + GATE_TTL_MS);
+  // Sliding renewal keeps a shift workstation on the personnel screen without
+  // ever leaving an indefinitely valid facility context behind.
+  await db.gateSession.update({ where: { id: gate.id }, data: { expiresAt } }).catch(() => undefined);
+  return { orgId: gate.orgId, orgName: gate.org.name, expiresAt };
+}
+
+/** Destroy the gate session. When clearCookie is false the cookie value is kept (already dead). */
+export async function destroyGateSession(): Promise<void> {
+  const jar = await cookies();
+  const token = jar.get(GATE_COOKIE)?.value;
+  if (token) {
+    await db.gateSession.deleteMany({ where: { tokenHash: tokenToHash(token) } });
+  }
+  jar.delete(GATE_COOKIE);
+}
+
+// ─── Permission resolution (role / custom role + overrides) ────────────────
+
+export async function resolvePermissions(
+  role: string,
+  customRole: { permissions: string; active: boolean } | null,
+  userId: string
+): Promise<Permission[]> {
+  let permissions: string[];
+  if (customRole && customRole.active) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(customRole.permissions);
+    } catch {
+      parsed = [];
+    }
+    permissions = Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+  } else {
+    permissions = permissionsForRole(role);
+  }
+  const overrides = await db.permissionOverride.findMany({ where: { userId } });
+  const set = new Set<string>(permissions);
+  for (const o of overrides) {
+    if (PROTECTED_PERMISSIONS.has(o.permission)) continue; // never escalatable
+    if (o.effect === "GRANT") set.add(o.permission);
+    else if (o.effect === "DENY") set.delete(o.permission);
+  }
+  return [...set].filter((p) => PERMISSION_GUARD.has(p)) as Permission[];
+}
+
+const PERMISSION_GUARD: ReadonlySet<string> = new Set<string>(PERMISSIONS);
+
+// ─── Auth context ───────────────────────────────────────────────────────────
+
 export interface AuthContext {
   userId: string;
   userName: string;
@@ -65,6 +160,29 @@ export interface AuthContext {
   role: string;
   permissions: Permission[];
   sessionId: string;
+  // Personnel identity context (spec §35)
+  status: string;
+  mustChangePassword: boolean;
+  department: string | null;
+  serviceLine: string | null;
+  staffCode: string | null;
+  designation: string | null;
+  customRoleId: string | null;
+}
+
+/**
+ * Facilities a user may open: OWNER/ADMIN span the whole organization,
+ * everyone else only their explicit FacilityMembership assignments.
+ */
+export async function accessibleFacilityIds(orgId: string, role: string, userId: string): Promise<string[]> {
+  if (role === "OWNER" || role === "ADMIN") {
+    const all = await db.facility.findMany({ where: { orgId }, select: { id: true } });
+    return all.map((f) => f.id);
+  }
+  const assigned = await db.facilityMembership.findMany({ where: { userId }, select: { facilityId: true } });
+  const ids = assigned.map((a) => a.facilityId);
+  const valid = await db.facility.findMany({ where: { id: { in: ids }, orgId }, select: { id: true } });
+  return valid.map((f) => f.id);
 }
 
 /** Resolve the current session into a fully-verified tenant context, or null. */
@@ -76,7 +194,7 @@ export async function getAuth(): Promise<AuthContext | null> {
   const session = await db.session.findUnique({
     where: { tokenHash: tokenToHash(token) },
     include: {
-      user: true,
+      user: { include: { department: true, overrides: true } },
       org: true,
     },
   });
@@ -84,19 +202,25 @@ export async function getAuth(): Promise<AuthContext | null> {
 
   const membership = await db.membership.findFirst({
     where: { userId: session.userId, orgId: session.orgId, active: true },
+    include: { customRole: true },
   });
   if (!membership) return null;
 
-  // Resolve active facility: stored value must belong to the same org.
+  // Non-active personnel can never use an old session (spec §28).
+  if (session.user.status !== "ACTIVE") return null;
+
+  // Resolve active facility: must belong to the org AND be accessible to this user.
+  const allowed = await accessibleFacilityIds(session.orgId, membership.role, session.userId);
   let facilityId = session.activeFacilityId;
-  let facility = facilityId
-    ? await db.facility.findFirst({ where: { id: facilityId, orgId: session.orgId } })
-    : null;
-  if (!facility) {
-    facility = await db.facility.findFirst({ where: { orgId: session.orgId }, orderBy: { createdAt: "asc" } });
-    if (!facility) return null;
-    facilityId = facility.id;
+  if (!facilityId || !allowed.includes(facilityId)) {
+    facilityId = allowed[0] ?? null;
+    if (!facilityId) return null;
+    await db.session.updateMany({ where: { id: session.id }, data: { activeFacilityId: facilityId } }).catch(() => undefined);
   }
+  const facility = await db.facility.findFirst({ where: { id: facilityId, orgId: session.orgId } });
+  if (!facility) return null;
+
+  const permissions = await resolvePermissions(membership.role, membership.customRole, session.userId);
 
   return {
     userId: session.user.id,
@@ -110,14 +234,25 @@ export async function getAuth(): Promise<AuthContext | null> {
     facilityName: facility.name,
     serviceProfileKey: facility.serviceProfileKey,
     role: membership.role,
-    permissions: permissionsForRole(membership.role),
+    permissions,
     sessionId: session.id,
+    status: session.user.status,
+    mustChangePassword: session.user.mustChangePassword,
+    department: session.user.department?.name ?? null,
+    serviceLine: session.user.serviceLine ?? facility.serviceProfileKey,
+    staffCode: session.user.staffCode,
+    designation: session.user.designation,
+    customRoleId: membership.customRoleId,
   };
 }
 
 export async function setActiveFacility(userId: string, orgId: string, facilityId: string): Promise<boolean> {
   const facility = await db.facility.findFirst({ where: { id: facilityId, orgId } });
   if (!facility) return false;
+  const membership = await db.membership.findFirst({ where: { userId, orgId, active: true } });
+  if (!membership) return false;
+  const allowed = await accessibleFacilityIds(orgId, membership.role, userId);
+  if (!allowed.includes(facilityId)) return false;
   await db.session.updateMany({
     where: { userId, orgId },
     data: { activeFacilityId: facilityId },
@@ -127,5 +262,5 @@ export async function setActiveFacility(userId: string, orgId: string, facilityI
 
 export function can(ctx: AuthContext | null, permission: Permission): boolean {
   if (!ctx) return false;
-  return hasPermission(ctx.role, permission);
+  return ctx.permissions.includes(permission);
 }

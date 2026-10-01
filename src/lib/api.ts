@@ -90,6 +90,10 @@ export function fail(error: unknown) {
 export async function requireAuth(permission?: string): Promise<AuthContext> {
   const ctx = await getAuth();
   if (!ctx) throw Unauthorized();
+  // Owner-created temporary passwords must be changed before any other API use.
+  if (ctx.mustChangePassword) {
+    throw new AppError(403, "must_change_password", "Change your password to continue.");
+  }
   if (permission && !ctx.permissions.includes(permission as never)) {
     throw Forbidden();
   }
