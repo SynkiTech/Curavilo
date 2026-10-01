@@ -23,6 +23,30 @@ export function ok<T>(data: T, status = 200) {
   return NextResponse.json(data as object, { status });
 }
 
+function prismaCode(error: unknown): string | null {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && /^P\d{4}$/.test(code)) return code;
+  }
+  return null;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** SQLite write contention / transaction timeouts: retryable, tell the user plainly. */
+function isTransientWriteError(error: unknown): boolean {
+  const code = prismaCode(error);
+  if (code === "P2024" || code === "P2034" || code === "P2010") return true;
+  const msg = messageOf(error);
+  return (
+    msg.includes("Socket timeout") ||
+    msg.includes("database is locked") ||
+    msg.includes("Timed out fetching a new connection")
+  );
+}
+
 export function fail(error: unknown) {
   if (error instanceof AppError) {
     return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
@@ -39,6 +63,20 @@ export function fail(error: unknown) {
         },
       },
       { status: 400 }
+    );
+  }
+  if (isTransientWriteError(error)) {
+    console.error("[api:busy]", messageOf(error));
+    return NextResponse.json(
+      { error: { code: "server_busy", message: "The server is busy saving another transaction. Please try again." } },
+      { status: 503 }
+    );
+  }
+  const code = prismaCode(error);
+  if (code === "P2002") {
+    return NextResponse.json(
+      { error: { code: "duplicate", message: "That record already exists." } },
+      { status: 409 }
     );
   }
   console.error("[api]", error);

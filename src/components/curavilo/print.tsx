@@ -65,7 +65,7 @@ export interface DocLine {
 }
 
 export interface ReceiptDocData {
-  kind: "RECEIPT" | "SALE_RECEIPT" | "INVOICE";
+  kind: "RECEIPT" | "SALE_RECEIPT" | "INVOICE" | "CREDIT_NOTE";
   number: string;
   issuedTo: string;
   dateTime: string;
@@ -412,6 +412,8 @@ function DocBody({ branding, data, mono }: { branding: Branding; data: ReceiptDo
     }
   };
   const isInvoice = data.kind === "INVOICE";
+  const isCredit = data.kind === "CREDIT_NOTE";
+  const docTitle = isInvoice ? "INVOICE" : isCredit ? "CREDIT NOTE" : "OFFICIAL RECEIPT";
   const center = "text-center";
   const gap = mono ? "my-1.5 border-t border-dashed border-stone-400" : "my-2 border-t border-stone-200";
 
@@ -432,7 +434,7 @@ function DocBody({ branding, data, mono }: { branding: Branding; data: ReceiptDo
           {branding.address ? <div>{branding.address}</div> : null}
           {branding.phone ? <div>Tel: {branding.phone}</div> : null}
         </div>
-        <div className="mt-1 font-semibold">{isInvoice ? "INVOICE" : "OFFICIAL RECEIPT"}</div>
+        <div className="mt-1 font-semibold">{docTitle}</div>
       </div>
 
       <div className={gap} />
@@ -440,7 +442,7 @@ function DocBody({ branding, data, mono }: { branding: Branding; data: ReceiptDo
       <div className="grid grid-cols-2 gap-x-2 text-[10px]">
         <div>No: <span className="font-semibold">{data.number}</span></div>
         <div className="text-right">{data.dateTime}</div>
-        <div className="col-span-2">Patient/Customer: <span className="font-semibold">{data.issuedTo}</span></div>
+        <div className="col-span-2">{isCredit ? "Credit for" : "Patient/Customer"}: <span className="font-semibold">{data.issuedTo}</span></div>
         <div className="col-span-2">Issued by: {data.cashier}</div>
       </div>
 
@@ -474,10 +476,13 @@ function DocBody({ branding, data, mono }: { branding: Branding; data: ReceiptDo
         {data.discountMinor > 0 ? (
           <div className="flex justify-between"><span>Discount</span><span>-{money(data.discountMinor)}</span></div>
         ) : null}
-        <div className="flex justify-between text-[11px] font-bold"><span>{isInvoice ? "Total due" : "Total"}</span><span>{money(data.totalMinor)}</span></div>
+        <div className="flex justify-between text-[11px] font-bold">
+          <span>{isInvoice ? "Total due" : isCredit ? "Refund total" : "Total"}</span>
+          <span>{money(data.totalMinor)}</span>
+        </div>
         {!isInvoice ? (
           <>
-            <div className="flex justify-between"><span>Paid ({data.method})</span><span>{money(data.amountPaidMinor ?? data.totalMinor)}</span></div>
+            <div className="flex justify-between"><span>{isCredit ? "Refund method" : "Paid"} ({data.method})</span><span>{money(data.amountPaidMinor ?? data.totalMinor)}</span></div>
             {data.reference ? <div className="flex justify-between"><span>Ref</span><span className="truncate pl-2">{data.reference}</span></div> : null}
           </>
         ) : (

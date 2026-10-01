@@ -7,6 +7,8 @@ const PREFIX: Record<string, string> = {
   PAYMENT: "RCP",
   ENCOUNTER: "ENC",
   SALE: "POS",
+  RETURN: "RET",
+  PO: "PO",
   PATIENT: "MRN",
   LAB: "LAB",
   LABREPORT: "LAB",

@@ -146,14 +146,52 @@ export interface InventoryItem {
   id: string; category: string; sku: string; barcode?: string | null; name: string;
   genericName?: string | null; dosageForm?: string | null; unit: string;
   purchasePriceMinor: number; sellingPriceMinor: number; currency: string; reorderLevel: number;
-  stockOnHand?: number; nextExpiry?: string | null;
+  stockOnHand?: number; nextExpiry?: string | null; active?: boolean;
   lots?: { id: string; batchNo: string; expiresAt?: string | null; qtyReceived: number; qtyRemaining: number }[];
 }
 
 export interface Sale {
   id: string; number: string; customerName?: string | null; status: string;
   subtotalMinor: number; discountMinor: number; totalMinor: number; method: string;
+  amountPaidMinor?: number; reference?: string | null; voidedAt?: string | null;
   createdAt: string; items?: { id: string; name: string; quantity: number; unitPriceMinor: number; totalMinor: number }[];
+  returns?: { number: string; totalMinor: number }[];
+  patient?: Patient | null;
+}
+
+export interface SaleReturn {
+  id: string; number: string; saleId: string; saleNumber: string; reason: string;
+  method: string; totalMinor: number; restocked: boolean; createdAt: string;
+  items?: { id: string; name: string; quantity: number; unitPriceMinor: number; totalMinor: number }[];
+}
+
+export interface SaleForReturn {
+  sale: { id: string; number: string; customerName?: string | null; method: string; createdAt: string; status: string };
+  lines: {
+    id: string; itemId: string; name: string; quantity: number;
+    unitPriceMinor: number; totalMinor: number; alreadyReturned: number; returnable: number;
+  }[];
+}
+
+export interface HeldSale {
+  id: string; label?: string | null; customerName?: string | null; patientId?: string | null;
+  discountMinor: number; totalMinor: number; createdAt: string;
+  itemsJson: string;
+}
+
+export interface Supplier {
+  id: string; name: string; phone?: string | null; email?: string | null;
+  address?: string | null; notes?: string | null; active: boolean; createdAt: string;
+}
+
+export interface PurchaseOrder {
+  id: string; number: string; status: string; expectedAt?: string | null;
+  notes?: string | null; receivedAt?: string | null; createdAt: string;
+  supplier?: { name: string };
+  items?: {
+    id: string; itemId: string; quantity: number; quantityReceived: number; unitCostMinor: number;
+    item?: { name: string; sku: string; unit: string };
+  }[];
 }
 
 export interface ServiceItem {

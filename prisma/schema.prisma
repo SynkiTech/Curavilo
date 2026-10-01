@@ -357,10 +357,13 @@ model InventoryItem {
   sellingPriceMinor Int    @default(0)
   currency          String  @default("NGN")
   reorderLevel      Int     @default(10)
+  supplierId        String?
   active            Boolean @default(true)
   createdAt         DateTime @default(now())
 
-  lots StockLot[]
+  supplier Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  lots     StockLot[]
+  poLines  PurchaseOrderItem[]
 
   @@unique([orgId, sku])
   @@index([orgId, facilityId, category])
@@ -420,6 +423,7 @@ model Sale {
 
   patient Patient?    @relation(fields: [patientId], references: [id])
   items   SaleItem[]
+  returns SaleReturn[]
 
   @@unique([orgId, number])
   @@index([orgId, facilityId, createdAt])
@@ -438,6 +442,112 @@ model SaleItem {
   sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@index([saleId])
+}
+
+model SaleReturn {
+  id          String   @id @default(cuid())
+  orgId       String
+  facilityId  String
+  number      String // RET-… credit note
+  saleId      String
+  saleNumber  String // denormalized for quick display
+  reason      String
+  method      String   @default("CASH") // CASH | TRANSFER | CARD | MOBILE | CREDIT
+  totalMinor  Int
+  restocked   Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  sale  Sale            @relation(fields: [saleId], references: [id])
+  items SaleReturnItem[]
+
+  @@unique([orgId, number])
+  @@index([orgId, facilityId, createdAt])
+  @@index([saleId])
+}
+
+model SaleReturnItem {
+  id            String @id @default(cuid())
+  orgId         String
+  saleReturnId  String
+  saleItemId    String?
+  itemId        String
+  name          String
+  quantity      Int
+  unitPriceMinor Int
+  totalMinor    Int
+
+  saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+
+  @@index([saleReturnId])
+}
+
+model HeldSale {
+  id            String   @id @default(cuid())
+  orgId         String
+  facilityId    String
+  label         String?
+  customerName  String?
+  patientId     String?
+  itemsJson     String // [{itemId,name,sku,quantity,unitPriceMinor}]
+  discountMinor Int      @default(0)
+  totalMinor    Int
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([orgId, facilityId, createdAt])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  items          InventoryItem[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([orgId, name])
+}
+
+model PurchaseOrder {
+  id          String    @id @default(cuid())
+  orgId       String
+  facilityId  String
+  number      String // PO-…
+  supplierId  String
+  status      String    @default("DRAFT") // DRAFT | SUBMITTED | PARTIAL | RECEIVED | CANCELLED
+  expectedAt  DateTime?
+  notes       String?
+  receivedAt  DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@unique([orgId, number])
+  @@index([orgId, facilityId, status])
+}
+
+model PurchaseOrderItem {
+  id              String @id @default(cuid())
+  orgId           String
+  purchaseOrderId String
+  itemId          String
+  quantity        Int
+  quantityReceived Int   @default(0)
+  unitCostMinor   Int    @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item          InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@index([purchaseOrderId])
 }
 
 // ─── Workflow & automation ──────────────────────────────────────────────────

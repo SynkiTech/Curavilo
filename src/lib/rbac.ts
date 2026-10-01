@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   "inventory:read",
   "inventory:write",
   "pos:sell",
+  "pos:refund", // returns, refunds, voids at the POS
   "reports:read",
   "ai:ask",
   "audit:read",
@@ -87,7 +88,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   PHARMACY: [
     "patients:read",
     "inventory:read", "inventory:write",
-    "pos:sell",
+    "pos:sell", "pos:refund",
     "billing:read",
   ],
   BILLING: [
