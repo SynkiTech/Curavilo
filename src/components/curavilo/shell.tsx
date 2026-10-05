@@ -19,6 +19,7 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiGet, apiSend, type Patient } from "./api";
 import { can, useApp, type ViewName } from "./store";
+import { NotificationBell } from "./notifications";
 import { MODULE_PERMISSION } from "@/lib/rbac";
 
 interface NavItem {
@@ -225,6 +226,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 {clock}
               </span>
             ) : null}
+            <NotificationBell />
             {/* Facility switcher */}
             {(session?.facilities?.length ?? 0) > 1 ? (
               <DropdownMenu>

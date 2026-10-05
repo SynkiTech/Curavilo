@@ -39,6 +39,12 @@ const OPS_SUGGESTIONS = [
   "How do I record a payment for an invoice?",
 ];
 
+const MESSAGING_SUGGESTIONS = [
+  "Notify the receptionist that I am ready to take patients",
+  "Tell the optician to get the trial frames ready",
+  "Who is on the front desk today?",
+];
+
 const CLINICAL_SUGGESTIONS = [
   "Differential diagnosis for a red, painful eye with photophobia?",
   "First-line management for newly diagnosed open-angle glaucoma?",
@@ -82,7 +88,13 @@ export function AIChat() {
   const [pendingAction, setPendingAction] = useState<{ name: string; params: Record<string, unknown>; risk: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isClinical = !!user?.permissions?.some((p) => p === "encounters:write" || p === "lab:operate" || p === "inpatient:manage");
-  const suggestions = useMemo(() => (isClinical ? [...CLINICAL_SUGGESTIONS.slice(0, 2), ...OPS_SUGGESTIONS.slice(0, 2)] : OPS_SUGGESTIONS), [isClinical]);
+  const suggestions = useMemo(
+    () =>
+      isClinical
+        ? [MESSAGING_SUGGESTIONS[0], ...CLINICAL_SUGGESTIONS.slice(0, 2), OPS_SUGGESTIONS[0]]
+        : [OPS_SUGGESTIONS[0], OPS_SUGGESTIONS[2], MESSAGING_SUGGESTIONS[0], MESSAGING_SUGGESTIONS[2]],
+    [isClinical]
+  );
 
   const conversations = useQuery({
     queryKey: ["ai-conversations"],
@@ -160,7 +172,7 @@ export function AIChat() {
     <div>
       <PageHeader
         title="AI Assistant"
-        subtitle="Your role-aware assistant: facility data answers, clinical decision support for professionals, and Curavilo guidance."
+        subtitle="Your role-aware assistant: facility data answers, clinical decision support for professionals, staff-to-staff messaging, and Curavilo guidance."
         actions={
           <Button variant="outline" size="sm" onClick={newConversation} className="no-print">
             <RotateCcw className="mr-2 h-3.5 w-3.5" /> New conversation
@@ -255,8 +267,8 @@ export function AIChat() {
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {isClinical
-                        ? "Operational questions, clinical decision support, or platform help - all in one chat."
-                        : "Ask about patients, revenue, stock, follow-ups, or how to use Curavilo."}
+                        ? "Operational questions, clinical decision support, colleague notifications, or platform help - all in one chat."
+                        : "Ask about patients, revenue, stock, colleagues to notify, or how to use Curavilo."}
                     </p>
                   </div>
                   <div className="flex max-w-lg flex-wrap justify-center gap-2">
@@ -338,15 +350,31 @@ export function AIChat() {
               {pendingAction ? (
                 <div className="curvilo-rise ml-auto max-w-[85%] rounded-xl border border-teal-300 bg-teal-50/80 p-3 shadow-sm backdrop-blur-sm">
                   <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Confirm action · risk {pendingAction.risk}</p>
-                  <p className="mt-1 text-sm">
-                    The assistant proposes: <strong>{pendingAction.name.replaceAll("_", " ")}</strong>
-                  </p>
-                  <pre className="mt-1 overflow-x-auto rounded bg-white/80 p-2 text-[11px]">{JSON.stringify(pendingAction.params, null, 1)}</pre>
+                  {pendingAction.name === "send_staff_message" ? (
+                    <div className="mt-1.5 space-y-1.5">
+                      <p className="text-sm">
+                        Deliver this message to <strong>{String(pendingAction.params.toName ?? pendingAction.params.toDesignation ?? "your colleague")}</strong>
+                        {pendingAction.params.subject ? <span className="text-stone-600"> · {String(pendingAction.params.subject)}</span> : null}
+                      </p>
+                      <p className="rounded-lg border border-teal-200 bg-white/90 px-3 py-2 text-sm italic text-stone-800">&ldquo;{String(pendingAction.params.message ?? "")}&rdquo;</p>
+                      {pendingAction.params.urgency && pendingAction.params.urgency !== "NORMAL" ? (
+                        <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">{String(pendingAction.params.urgency)}</span>
+                      ) : null}
+                      <p className="text-[11px] text-muted-foreground">They will receive it on their dashboard and notification bell.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mt-1 text-sm">
+                        The assistant proposes: <strong>{pendingAction.name.replaceAll("_", " ")}</strong>
+                      </p>
+                      <pre className="mt-1 overflow-x-auto rounded bg-white/80 p-2 text-[11px]">{JSON.stringify(pendingAction.params, null, 1)}</pre>
+                    </>
+                  )}
                   <div className="mt-2 flex gap-2">
                     <Button size="sm" className="bg-gradient-to-r from-teal-700 to-cyan-700 hover:from-teal-800 hover:to-cyan-800" disabled={confirmAction.isPending}
                       onClick={() => confirmAction.mutate({ action: pendingAction.name, params: pendingAction.params })}>
                       {confirmAction.isPending ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-                      Confirm & execute
+                      {pendingAction.name === "send_staff_message" ? "Send it now" : "Confirm & execute"}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setPendingAction(null)}>Dismiss</Button>
                   </div>
@@ -365,7 +393,7 @@ export function AIChat() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={aiPatientContext ? `Ask about ${aiPatientContext.name}…` : isClinical ? "Ask about data, a clinical question, or how to use Curavilo…" : "Ask about patients, revenue, stock, follow-ups…"}
+                placeholder={aiPatientContext ? `Ask about ${aiPatientContext.name}…` : isClinical ? "Ask about data, a clinical question, or tell a colleague something…" : "Ask about patients, revenue, stock, or notify a colleague…"}
                 aria-label="Ask the AI assistant"
                 maxLength={1000}
                 className="border-teal-200/80 focus-visible:ring-teal-600/40"

@@ -18,7 +18,7 @@ export interface OutgoingMessage {
   recipientUserId?: string | null;
   subject?: string | null;
   body: string;
-  source: "WORKFLOW" | "MANUAL" | "SYSTEM" | "SCHEDULER";
+  source: "WORKFLOW" | "MANUAL" | "SYSTEM" | "SCHEDULER" | "AI";
   sourceId?: string | null;
 }
 

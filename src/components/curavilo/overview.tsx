@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { apiGet, apiSend, formatMoney, formatDateTime, type Payment, type QueueEntry } from "./api";
 import { LoadingState, ErrorState, MetricCard, type Accent } from "./ui-kit";
 import { useApp } from "./store";
+import { TeamMessagesWidget } from "./notifications";
 import { getDashboardConfig, applyPrefs, WIDGET_PERMISSION, type DashboardPrefs, type DashboardWidgetId } from "@/lib/dashboard-config";
 
 interface DashboardData {
@@ -489,6 +490,7 @@ export function Overview() {
         )}
       </section>
     ),
+    "team-messages": <TeamMessagesWidget />,
     "my-tasks": (
       <section key="my-tasks" aria-label="My tasks" className="curvilo-card curvilo-rise rounded-xl border bg-white" style={{ animationDelay: "740ms" }}>
         <div className="flex items-center justify-between border-b px-4 py-3">
@@ -638,6 +640,7 @@ function WidgetPrefsButton({
     "today-sales": "Today's sales",
     "pending-results": "Pending results",
     "my-tasks": "My tasks",
+    "team-messages": "Team messages",
   };
 
   const orderKey = order.join(",");

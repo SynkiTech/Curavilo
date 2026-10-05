@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireAuth("ai:ask");
     const body = await parseBody(request, z.object({
-      action: z.enum(["create_follow_up", "create_task", "generate_report"]),
+      action: z.enum(["create_follow_up", "create_task", "generate_report", "send_staff_message"]),
       params: z.record(z.string(), z.unknown()).default({}),
     }));
     return ok(await executeAiAction(ctx, body.action, body.params));

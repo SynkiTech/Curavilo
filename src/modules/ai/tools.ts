@@ -96,6 +96,71 @@ function deny(): ToolResult {
   };
 }
 
+/**
+ * Designation keyword expansion: stored designations are free text ("Front Desk
+ * Officer", "OD", "RN, Ophthalmic"), so role-style queries ("receptionist",
+ * "doctor") are expanded into keywords that match how the facility writes them.
+ * The department is included as a fallback match (e.g. department "Front Desk").
+ */
+export const DESIGNATION_KEYWORDS: Record<string, string[]> = {
+  RECEPTIONIST: ["reception", "front desk"],
+  DOCTOR: ["doctor", "mbbs", "physician", "medical"],
+  OPHTHALMOLOGIST: ["ophthalm"],
+  OPTOMETRIST: ["optom", "od"],
+  OPTICIAN: ["optic", "dispensing"],
+  DENTIST: ["dent"],
+  NURSE: ["nurse", "rn"],
+  PHARMACIST: ["pharm"],
+  LAB_SCIENTIST: ["lab", "scientist"],
+  CASHIER: ["cashier"],
+  ADMIN: ["admin"],
+};
+
+export function designationFilters(input: string): string[] {
+  const key = input.trim().toUpperCase();
+  const keywords = new Set<string>([input.trim()]);
+  for (const [roleKey, words] of Object.entries(DESIGNATION_KEYWORDS)) {
+    if (roleKey.includes(key) || key.includes(roleKey) || words.some((w) => key.includes(w.toUpperCase()))) {
+      for (const w of words) keywords.add(w);
+    }
+  }
+  return [...keywords];
+}
+
+/** Prisma WHERE fragment matching a designation/role query across designation + department. */
+export function designationWhere(input: string): Record<string, unknown> {
+  const keywords = designationFilters(input);
+  return {
+    OR: [
+      ...keywords.map((kw) => ({ designation: { contains: kw } })),
+      { department: { contains: input.trim() } },
+    ],
+  };
+}
+
+/**
+ * Map a free-text designation ("Front Desk Officer", "receptionist", "OD") to the
+ * closest platform role. Used to reach the facility role team when no staff
+ * record matches, and to interpret directory queries.
+ */
+export function platformRoleForDesignation(input: string | null | undefined): string | null {
+  const d = (input ?? "").toUpperCase();
+  if (!d) return null;
+  // Nurse first: "RN, Ophthalmic" is a nurse, not an ophthalmologist.
+  if (d.includes("NURSE") || d.includes("RN")) return "NURSE";
+  if (d.includes("OPHTHAL")) return "OPHTHALMOLOGIST";
+  if (d.includes("OPTOM")) return "OPTOMETRIST";
+  if (d.includes("DENT")) return "DENTIST";
+  if (d.includes("OPTIC") || d.includes("DISPENS")) return "OPTICIAN";
+  if (d.includes("RECEPTION") || d.includes("FRONT DESK")) return "RECEPTIONIST";
+  if (d.includes("PHARM")) return "PHARMACY";
+  if (d.includes("LAB") || d.includes("SCIENTIST")) return "LAB";
+  if (d.includes("BILL") || d.includes("ACCOUNT") || d.includes("CASHIER")) return "BILLING";
+  if (d.includes("DOCTOR") || d.includes("MBBS") || d.includes("MD") || d.includes("MEDICAL") || d.includes("PHYSICIAN")) return "DOCTOR";
+  if (d.includes("ADMIN")) return "ADMIN";
+  return null;
+}
+
 export const AI_TOOLS: ToolDef[] = [
   {
     name: "encounter.count",
@@ -330,6 +395,105 @@ export const AI_TOOLS: ToolDef[] = [
       return {
         data: { count, filter: params.designation ?? "all designations" },
         provenance: { source: "Staff records", filters: params.designation ? { designation: params.designation } : {}, recordCount: count },
+      };
+    },
+  },
+  {
+    // Directory lookup for intra-facility messaging and "who is available" questions.
+    // Returns workplace contact info only (name, designation, department) - never
+    // personal contact details. Available to every role that can use the AI.
+    name: "staff.directory",
+    description:
+      "Look up colleagues in THIS facility by part of a name and/or by role/designation (e.g. receptionist, optometrist, doctor, nurse, pharmacist). Covers personnel records AND active facility accounts. Use it to find who to notify or message, or to answer who-is-on-the-team questions. Returns name, designation and department only. Max 10 rows.",
+    permission: "ai:ask",
+    params: z
+      .object({
+        query: z.string().min(2).max(60).optional(),
+        designation: z.string().min(2).max(40).optional(),
+      })
+      .strict(),
+    provenanceFields: ["query", "designation"],
+    exec: async (ctx, raw) => {
+      const params = z
+        .object({
+          query: z.string().min(2).max(60).optional(),
+          designation: z.string().min(2).max(40).optional(),
+        })
+        .strict()
+        .parse(raw);
+      if (!params.query && !params.designation) {
+        return {
+          data: { staff: [], note: "Provide a name or a designation to search the staff directory." },
+          provenance: { source: "Staff records", note: "No search filter provided." },
+        };
+      }
+      // Source 1: personnel staff records (may exist without a user account).
+      const where: Record<string, unknown> = { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true };
+      if (params.query && params.designation) {
+        where.AND = [{ name: { contains: params.query } }, designationWhere(params.designation)];
+      } else if (params.query) {
+        where.name = { contains: params.query };
+      } else if (params.designation) {
+        Object.assign(where, designationWhere(params.designation));
+      }
+      const staff = await db.staffMember.findMany({
+        where,
+        take: 10,
+        orderBy: [{ designation: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, designation: true, department: true },
+      });
+
+      // Source 2: active user accounts opened at this facility (covers colleagues
+      // without a personnel record). Matched by name, free-text designation, or
+      // the platform role that corresponds to the requested designation.
+      const userOr: Record<string, unknown>[] = [];
+      if (params.query) {
+        userOr.push({ name: { contains: params.query } });
+        const qRole = platformRoleForDesignation(params.query);
+        if (qRole) userOr.push({ memberships: { some: { orgId: ctx.orgId, role: qRole, active: true } } });
+      }
+      if (params.designation) {
+        const dRole = platformRoleForDesignation(params.designation);
+        if (dRole) userOr.push({ memberships: { some: { orgId: ctx.orgId, role: dRole, active: true } } });
+        for (const kw of designationFilters(params.designation)) {
+          userOr.push({ designation: { contains: kw } });
+        }
+      }
+      let userRows: Array<{ id: string; name: string; designation: string | null; department: string | null }> = [];
+      if (userOr.length > 0) {
+        const users = await db.user.findMany({
+          where: { status: "ACTIVE", facilityMemberships: { some: { facilityId: ctx.facilityId } }, OR: userOr },
+          take: 10,
+          orderBy: { name: "asc" },
+          select: {
+            id: true, name: true, designation: true,
+            memberships: { where: { orgId: ctx.orgId, active: true }, select: { role: true } },
+          },
+        });
+        userRows = users.map((u) => ({
+          id: u.id,
+          name: u.name,
+          designation: u.designation ?? u.memberships[0]?.role ?? "STAFF",
+          department: u.memberships[0]?.role ?? null,
+        }));
+      }
+
+      // Merge + dedupe by name (a person can exist in both sources).
+      const seen = new Set(staff.map((s) => s.name.toLowerCase()));
+      const merged = [
+        ...staff.map((s) => ({ id: s.id, name: s.name, designation: s.designation, department: s.department })),
+        ...userRows.filter((u) => !seen.has(u.name.toLowerCase())),
+      ].slice(0, 10);
+      return {
+        data: { staff: merged, count: merged.length, facility: ctx.facilityName },
+        provenance: {
+          source: "Staff records",
+          filters: {
+            ...(params.query ? { query: params.query } : {}),
+            ...(params.designation ? { designation: params.designation } : {}),
+          },
+          recordCount: merged.length,
+        },
       };
     },
   },

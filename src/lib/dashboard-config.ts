@@ -18,7 +18,8 @@ export type DashboardWidgetId =
   | "expiring-stock"
   | "today-sales"
   | "pending-results"
-  | "my-tasks";
+  | "my-tasks"
+  | "team-messages";
 
 export interface DashboardWidget {
   id: DashboardWidgetId;
@@ -41,7 +42,7 @@ export interface DashboardConfig {
 /** Per-role widget layouts (spec §67). Anything not listed falls back to STAFF. */
 const ROLE_WIDGETS: Record<string, DashboardWidget[]> = {
   OWNER: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "revenue-trend", span: "wide" }, { id: "payment-mix" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "patient-volume" }, { id: "today-sales" },
@@ -49,67 +50,67 @@ const ROLE_WIDGETS: Record<string, DashboardWidget[]> = {
     { id: "recent-payments" }, { id: "my-tasks" },
   ],
   ADMIN: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "revenue-trend", span: "wide" }, { id: "payment-mix" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "patient-volume" },
     { id: "alerts-low-stock" }, { id: "recent-payments" }, { id: "my-tasks" },
   ],
   DOCTOR: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "pending-results" }, { id: "patient-volume" }, { id: "my-tasks" },
   ],
   OPHTHALMOLOGIST: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "pending-results" }, { id: "patient-volume" }, { id: "my-tasks" },
   ],
   OPTOMETRIST: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "patient-volume" }, { id: "my-tasks" },
   ],
   DENTIST: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "pending-results" }, { id: "patient-volume" }, { id: "my-tasks" },
   ],
   NURSE: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "live-queue" }, { id: "today-appointments" },
     { id: "pending-results" }, { id: "my-tasks" },
   ],
   RECEPTIONIST: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-appointments" }, { id: "live-queue" },
     { id: "recent-payments" }, { id: "my-tasks" },
   ],
   PHARMACY: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-sales" }, { id: "alerts-low-stock" },
     { id: "expiring-stock" }, { id: "my-tasks" },
   ],
   OPTICIAN: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "today-sales" }, { id: "alerts-low-stock" },
     { id: "expiring-stock" }, { id: "my-tasks" },
   ],
   LAB: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "pending-results" }, { id: "my-tasks" },
   ],
   BILLING: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "revenue-trend", span: "wide" }, { id: "payment-mix" },
     { id: "recent-payments" }, { id: "today-sales" }, { id: "my-tasks" },
   ],
   INVENTORY: [
-    { id: "kpi-band" }, { id: "quick-actions" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "alerts-low-stock" }, { id: "expiring-stock" }, { id: "my-tasks" },
   ],
   STAFF: [
-    { id: "kpi-band" }, { id: "quick-actions" }, { id: "my-tasks" },
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" }, { id: "my-tasks" },
   ],
 };
 
@@ -128,6 +129,7 @@ export const WIDGET_PERMISSION: Record<DashboardWidgetId, Permission | null> = {
   "today-sales": "pos:sell",
   "pending-results": "lab:operate",
   "my-tasks": null,
+  "team-messages": null,
 };
 
 const DEFAULT_ACTIONS: QuickAction[] = [
