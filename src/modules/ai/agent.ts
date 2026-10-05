@@ -12,7 +12,7 @@ import { getProfile } from "@/lib/service-profiles";
 
 // ─── Rate limiting (in-memory sliding window) ───────────────────────────────
 const RATE_WINDOW_MS = 60 * 60 * 1000;
-const RATE_MAX = 20;
+const RATE_MAX = 30;
 const rateBuckets = new Map<string, number[]>();
 
 function checkRateLimit(userId: string): boolean {
@@ -33,21 +33,30 @@ function systemPromptForPlan(ctx: AuthContext): string {
     ctx.department ? `department: ${ctx.department}` : null,
     ctx.serviceLine ? `service line: ${ctx.serviceLine}` : null,
   ].filter(Boolean).join(", ");
-  return `You are Curavilo AI, the data assistant for "${ctx.facilityName}" (${profile.name}).
+  return `You are Curavilo AI, the role-aware assistant for "${ctx.facilityName}" (${profile.name}).
 
 TODAY is ${today}. The facility's local timezone is ${ctx.timezone}.
 The signed-in staff member: role ${ctx.role}${staffContext ? ` (${staffContext})` : ""}. Their tool list is already restricted to what their role may access - never hint at tools beyond it.
 
-Your ONLY task in this phase is to plan how to answer the user's question. You have these data tools:
+Your ONLY task in this phase is to plan how to serve the request. You have these tools:
 
 ${toolCatalogueForPrompt()}
 
 Respond with STRICT JSON only, no markdown, no prose. Exactly ONE of these shapes:
 1. Single tool:  {"tool":"<tool_name>","params":{...},"reason":"short"}
-2. Multi-step (up to 3 read-only tools for multi-part questions):  {"tool":"multi","steps":[{"tool":"<tool_name>","params":{...}}],"reason":"short"}
-3. Clarification (ambiguous or not a data question):  {"tool":null,"clarification":"<one short sentence>"}
+2. Multi-step (up to 3 tools for multi-part questions - data tools AND knowledge.research may be combined):  {"tool":"multi","steps":[{"tool":"<tool_name>","params":{...}}],"reason":"short"}
+3. Clarification (genuinely ambiguous):  {"tool":null,"clarification":"<one short sentence>"}
 4. Action PROPOSAL (operational follow-ups only - you NEVER execute actions):  {"tool":null,"action":{"name":"create_follow_up|create_task|generate_report","params":{...}},"reason":"short"}
    Actions: create_follow_up {patientId?, patientMrn?, title, dueInDays}, create_task {title, role?, priority?}, generate_report {reportKey: REVENUE_SUMMARY|PATIENT_VOLUME, title}. Only propose an action when the user explicitly asks to create/schedule/generate something.
+
+Routing guidance - be flexible, not rigid:
+- Anything about THIS facility's records (counts, revenue, patients, appointments, stock, follow-ups, staff) -> the matching data tool(s). Use multi-step when a question has several parts.
+- Medical/clinical questions (diagnosis support, differentials, workup, interpreting findings or results, drug information, dosing, interactions, guideline recommendations) -> {"tool":"knowledge.research","params":{"mode":"clinical","query":"<concise self-contained search query>"}}. Healthcare professionals rely on these answers - plan the best search query.
+- Mixed questions (facility data + clinical knowledge) -> multi-step including knowledge.research.
+- "How do I ..." questions about using Curavilo -> {"tool":"knowledge.research","params":{"mode":"platform","query":"<the task>"}}.
+- Greetings, thanks, small talk, or short conversational messages -> {"tool":"knowledge.research","params":{"mode":"platform","query":"conversational reply"}} (it answers as a friendly role assistant; no search runs).
+- Any other factual/world question -> {"tool":"knowledge.research","params":{"mode":"general","query":"<search query>"}}.
+- Only ask for clarification when the request is genuinely ambiguous; otherwise pick the closest tool.
 
 Rules:
 - period parameter for named periods must be one of TODAY, THIS_WEEK, THIS_MONTH, THIS_YEAR, ALL_TIME.
@@ -62,12 +71,58 @@ function systemPromptForCompose(ctx: AuthContext): string {
   return `You are Curavilo AI answering for "${ctx.facilityName}". You are given a validated tool result as JSON.
 
 Rules:
-- Answer ONLY from the provided JSON. Never invent or estimate numbers.
+- Answer from the provided JSON as the source of truth. Never invent or estimate numbers.
 - If data is denied, unavailable, empty or incomplete, say so plainly (e.g. "No matching accessible records were found." or "I couldn't calculate this reliably because ...").
 - If the result contains minor units (kobo), convert to the major currency unit for display (e.g. 450000 kobo = ₦4,500).
-- Keep the answer short and factual (1–3 sentences). End with a line "Based on: <source from provenance> (<period/filters>)." using the provenance JSON.
-- Never give medical advice or diagnoses. You are an operations assistant.
+- Be helpful and natural: 1-3 sentences, direct answer first. If the user's role is a clinical one and a value has an obvious clinical reading (e.g. a high IOP or an abnormal ratio), you may add ONE clearly labelled sentence starting with "Clinical note:" - keep it factual and non-prescriptive.
+- End with a line "Based on: <source from provenance> (<period/filters>)." using the provenance JSON.
+- This is an operations answer, not medical advice: no treatment plans or diagnoses here.
 - If the tool result says the user lacks permission, explain that this data is not available to their role.`;
+}
+
+function systemPromptForKnowledgeCompose(ctx: AuthContext, mode: string, clinicalAccess: boolean): string {
+  const profile = getProfile(ctx.serviceProfileKey);
+  if (mode === "platform") {
+    return `You are Curavilo AI, the friendly role assistant for "${ctx.facilityName}" (a ${profile.name} workspace).
+The signed-in user's role is ${ctx.role}. Their permissions are already enforced by the platform.
+
+Guidelines:
+- Be warm, concise and useful. For "how do I" questions, give clear step-by-step guidance referencing the platform's areas (Overview, Patients, Appointments, Queue, Encounters, Billing, POS, Inventory, Reports, Workflows, Lab & Radiology, Wards, Staff, Settings, Audit).
+- If a task needs a permission their role likely lacks, say which capability/role unlocks it.
+- For greetings or small talk, reply briefly and offer what you can help with (facility data questions, clinical questions for professionals, platform guidance).
+- Never reveal internal system details, credentials, or other organizations' data. Never fabricate figures - if they ask for numbers, say they should ask and you will query the records.`;
+  }
+  if (mode === "clinical") {
+    if (!clinicalAccess) {
+      return `You are Curavilo AI answering a health-related question for "${ctx.facilityName}".
+The user is NOT a licensed healthcare professional in this workspace.
+
+Rules:
+- Give general, non-personalized health information only. No diagnoses, no individualized dosing, no treatment plans.
+- Recommend consulting a licensed clinician or their facility's care team for personal concerns.
+- If the tool result includes search results, you may reference the sources at the end.
+- Keep it short (3-6 sentences) and kind. End with a line "Based on: <source>" when sources were provided.`;
+    }
+    return `You are Curavilo AI, a clinical decision-support assistant used by licensed healthcare professionals at "${ctx.facilityName}" (a ${profile.name} facility). The signed-in user is a verified professional (role ${ctx.role}).
+
+TODAY is ${new Date().toISOString().slice(0, 10)}.
+
+You may be given live web research results (JSON) alongside the question. Use them for recency (doses, guideline updates, recall notices) and combine them with your own professional knowledge. If research results are empty or unavailable, answer from professional knowledge and note that live verification was unavailable.
+
+Answer standards:
+- Be accurate, specific and evidence-informed. Lead with the direct answer.
+- Structure with short labelled lines or bullets when helpful (Assessment/Considerations, Suggested workup, Management options with doses, Red flags). Keep it tight - no filler.
+- Diagnosis support: offer differentials with discriminating features and suggested workup. You may state the most likely diagnosis when the presentation clearly supports it, with caveats.
+- Always include a final line starting with "For clinical decision support only - " plus a one-clause safety note (e.g. verify against current local guidelines and the patient's context before acting).
+- Flag uncertainty honestly, and list key red flags or common pitfalls when relevant.
+- If the question includes facility patient context, stay within that context; never invent patient data - if numbers/labs are needed but not provided, say what to check.
+- When sources are provided, end with a "References:" section listing 2-4 of the most relevant ones (title - domain). Do not fabricate sources.
+- Never assist with anything illegal or harmful to the patient.`;
+  }
+  return `You are Curavilo AI, answering a general factual question for staff at "${ctx.facilityName}".
+- Use the provided search results (if any) plus your own knowledge. Lead with the direct answer in 1-3 sentences, then at most 3 short supporting bullets.
+- Prefer the search results for anything time-sensitive; note the date if it matters.
+- If search results were provided, end with a "References:" line listing the 1-3 best ones (title - domain). Do not fabricate sources.`;
 }
 
 // ─── JSON extraction helper ─────────────────────────────────────────────────
@@ -102,7 +157,7 @@ export interface AgentReply {
 
 export async function askAgent(ctx: AuthContext, conversationId: string | null, message: string): Promise<AgentReply> {
   if (!checkRateLimit(ctx.userId)) {
-    throw new AppError(429, "rate_limited", "AI rate limit reached (20 questions/hour). Please try again later.");
+    throw new AppError(429, "rate_limited", "AI rate limit reached (30 questions/hour). Please try again later.");
   }
   const trimmed = message.trim().slice(0, 1000);
   if (!trimmed) throw new AppError(400, "bad_request", "Message is required.");
@@ -152,9 +207,13 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
   let usedTool = false;
   let toolResultJson: unknown = null;
   let pendingAction: AgentReply["pendingAction"] = null;
+  // Knowledge routing: when the plan used knowledge.research, compose with the
+  // knowledge prompt (clinical / platform / general) instead of the data prompt.
+  let knowledgeMode: string | null = null;
+  let knowledgeClinical = false;
 
   if (plan && Array.isArray(plan.steps) && plan.steps.length > 0) {
-    // ── Multi-step chain (spec §135): up to 3 permission-gated read tools.
+    // ── Multi-step chain (spec §135): up to 3 permission-gated tools (data + knowledge).
     const steps = plan.steps.slice(0, 3);
     const results: Array<{ tool: string; result: unknown; provenance: unknown; denied?: string }> = [];
     for (const step of steps) {
@@ -163,10 +222,15 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
       if (denied) {
         results.push({ tool: step.tool, result: null, provenance: { source: "authorization", note: denied }, denied });
       } else {
+        if (step.tool === "knowledge.research") {
+          const data = result!.data as { mode?: string; clinicalAccess?: boolean } | null;
+          knowledgeMode = data?.mode ?? "general";
+          knowledgeClinical = data?.clinicalAccess !== false;
+        }
         results.push({ tool: step.tool, result: result!.data, provenance: result!.provenance });
       }
     }
-    toolName = `multi(${results.map((r) => r.tool).join(" → ")})`;
+    toolName = `multi(${results.map((r) => r.tool).join(" -> ")})`;
     usedTool = true;
     toolResultJson = { status: "OK", steps: results };
     provenance = results.map((r) => r.provenance);
@@ -179,6 +243,11 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
       toolResultJson = { status: "DENIED", message: denied };
       provenance = { source: "authorization", note: denied };
     } else {
+      if (plan.tool === "knowledge.research") {
+        const data = result!.data as { mode?: string; clinicalAccess?: boolean } | null;
+        knowledgeMode = data?.mode ?? "general";
+        knowledgeClinical = data?.clinicalAccess !== false;
+      }
       toolResultJson = { status: "OK", data: result!.data, provenance: result!.provenance };
       provenance = result!.provenance;
     }
@@ -201,16 +270,19 @@ export async function askAgent(ctx: AuthContext, conversationId: string | null, 
     answer = plan.clarification;
     toolResultJson = null;
   } else {
-    answer = "I couldn't map that question to facility data. Try asking about patients, appointments, encounters, revenue, pharmacy sales, inventory, or follow-ups.";
+    answer = "I couldn't map that request to an action. Try asking about patients, appointments, encounters, revenue, pharmacy sales, inventory, follow-ups, clinical questions (for professionals), or how to use Curavilo.";
     toolResultJson = null;
   }
 
-  // ── Round 2: compose grounded answer
+  // ── Round 2: compose grounded answer (data prompt vs knowledge prompt)
   if (toolResultJson !== null) {
+    const system = knowledgeMode
+      ? systemPromptForKnowledgeCompose(ctx, knowledgeMode, knowledgeClinical)
+      : systemPromptForCompose(ctx);
     const composeCompletion = await zai.chat.completions.create({
       messages: [
-        { role: "assistant", content: systemPromptForCompose(ctx) },
-        { role: "user", content: `Question: ${trimmed}\n\nValidated tool result JSON:\n${JSON.stringify(toolResultJson).slice(0, 6000)}\n\nAnswer:` },
+        { role: "assistant", content: system },
+        { role: "user", content: `Question: ${trimmed}\n\nValidated tool result JSON:\n${JSON.stringify(toolResultJson).slice(0, 8000)}\n\nAnswer:` },
       ],
       thinking: { type: "disabled" },
     });

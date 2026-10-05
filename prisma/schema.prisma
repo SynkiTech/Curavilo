@@ -73,6 +73,8 @@ model Facility {
   reportFooter   String?
   receiptFooter  String?
   authorizedSignatory String?
+  // Per-facility terminology overrides on top of the service profile (JSON object key -> label)
+  termOverrides  String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

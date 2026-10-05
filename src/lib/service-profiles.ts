@@ -47,8 +47,10 @@ const DEFAULT_TERMINOLOGY: Record<string, string> = {
   "procedure.label": "Procedure",
   "department.label": "Department",
   "followup.label": "Follow-up",
+  "followup.plural": "Follow-ups",
   "doctor.label": "Doctor",
   "encounter.label": "Encounter",
+  "encounter.plural": "Encounters",
 };
 
 const VITALS_SECTION: FormSection = {
@@ -106,6 +108,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       "procedure.label": "Ophthalmic Procedure",
       "doctor.label": "Optometrist",
       "encounter.label": "Eye Examination Record",
+      "encounter.plural": "Eye Examination Records",
       "visit.label": "Eye Visit",
     },
     form: {
@@ -166,6 +169,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       "examination.label": "Dental Examination",
       "procedure.label": "Dental Procedure",
       "followup.label": "Treatment Plan Review",
+      "followup.plural": "Treatment Plan Reviews",
       "doctor.label": "Dentist",
     },
     form: {
@@ -265,6 +269,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       "visit.label": "Antenatal Visit",
       "consultation.label": "Antenatal Consultation",
       "followup.label": "Antenatal Next Visit",
+      "followup.plural": "Antenatal Next Visits",
       "doctor.label": "Obstetrician",
     },
     form: {
@@ -311,6 +316,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       "patient.plural": "Children",
       "consultation.label": "Pediatric Consultation",
       "followup.label": "Review",
+      "followup.plural": "Reviews",
       "doctor.label": "Pediatrician",
     },
     form: {
@@ -429,6 +435,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       "visit.label": "Session",
       "consultation.label": "Physiotherapy Assessment",
       "followup.label": "Next Session",
+      "followup.plural": "Next Sessions",
       "doctor.label": "Physiotherapist",
     },
     form: {
@@ -501,6 +508,7 @@ export const SERVICE_PROFILES: Record<string, ServiceProfile> = {
       ...DEFAULT_TERMINOLOGY,
       "consultation.label": "Therapy / Psychiatric Session",
       "followup.label": "Next Session",
+      "followup.plural": "Next Sessions",
       "doctor.label": "Clinician",
     },
     form: {
@@ -535,6 +543,31 @@ export function getProfile(key: string): ServiceProfile {
 /** Resolve a terminology key against profile overrides, falling back to defaults. */
 export function t(profile: ServiceProfile, key: string): string {
   return profile.terminology[key] ?? DEFAULT_TERMINOLOGY[key] ?? key;
+}
+
+/** The terminology keys a facility may customize in Settings. */
+export const TERMINOLOGY_KEYS = Object.keys(DEFAULT_TERMINOLOGY);
+export const DEFAULT_TERMINOLOGY_PUBLIC: Record<string, string> = DEFAULT_TERMINOLOGY;
+
+/**
+ * Merge terminology for a facility: platform defaults < service profile < facility overrides.
+ * `overridesJson` is Facility.termOverrides (JSON string of Record<string,string>).
+ */
+export function resolveTerminology(profileKey: string, overridesJson: string | null | undefined): Record<string, string> {
+  const merged: Record<string, string> = { ...DEFAULT_TERMINOLOGY, ...getProfile(profileKey).terminology };
+  if (overridesJson) {
+    try {
+      const parsed = JSON.parse(overridesJson) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          if (typeof v === "string" && v.trim() && TERMINOLOGY_KEYS.includes(k)) merged[k] = v.trim().slice(0, 60);
+        }
+      }
+    } catch {
+      // corrupted JSON: fall through to profile terminology
+    }
+  }
+  return merged;
 }
 
 export const DEPARTMENTS = ["GENERAL", "OPHTHALMOLOGY", "DENTAL", "LABORATORY", "IMAGING", "MATERNITY", "PEDIATRICS", "PHARMACY"];

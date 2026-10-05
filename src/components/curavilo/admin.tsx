@@ -3,19 +3,21 @@
 // Admin views: Workflows (builder), Audit, Settings, Staff, Follow-ups
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Play, Plus, CircleCheck, CircleX, Wrench, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Loader2, Play, Plus, CircleCheck, CircleX, Wrench, ThumbsUp, ThumbsDown, Pencil, Power, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiGet, apiSend, formatMoney, formatDate, formatDateTime, type FollowUp, type StaffMember, type ServiceItem, type SessionInfo } from "./api";
 import { LoadingState, ErrorState, EmptyState, PageHeader, StatusBadge } from "./ui-kit";
 import { WorkflowBuilderDialog, type BuilderInitial, type BuilderNode } from "./workflow-builder";
 
-import { useApp, can } from "./store";
+import { useApp, can, term } from "./store";
 import { toast } from "sonner";
 
 // ─── Workflows ──────────────────────────────────────────────────────────────
@@ -340,6 +342,7 @@ export function ClinicalDirectory() {
 
 export function FollowUps() {
   const { session, navigate } = useApp();
+  const followUpLabel = term("followup.plural");
   const canWrite = session?.user?.permissions.includes("encounters:write");
   const queryClient = useQueryClient();
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -357,7 +360,7 @@ export function FollowUps() {
 
   return (
     <div>
-      <PageHeader title="Follow-ups" subtitle="Pending reviews - overdue ones are highlighted." />
+      <PageHeader title={followUpLabel} subtitle="Pending reviews - overdue ones are highlighted." />
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
       {data ? (
@@ -403,6 +406,9 @@ interface FacilitySettings {
   logoData?: string | null; reportFooter?: string | null; receiptFooter?: string | null; serviceProfileKey: string;
 }
 interface ProfileInfo { name: string; description: string; terminology: Record<string, string> }
+interface ProfileOption { key: string; name: string; description: string }
+
+const SERVICE_CATEGORIES = ["CONSULTATION", "EXAMINATION", "PROCEDURE", "LAB", "IMAGING", "MEDICATION", "OTHER"] as const;
 
 export function Settings() {
   const { session, setSession } = useApp();
@@ -410,16 +416,23 @@ export function Settings() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useState<HTMLInputElement | null>(null);
+  const [termsForm, setTermsForm] = useState<Record<string, string>>({});
+  const [pendingProfile, setPendingProfile] = useState<string | null>(null);
+  const [serviceDialog, setServiceDialog] = useState<{ mode: "add" } | { mode: "edit"; service: ServiceItem } | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => apiGet<{ facility: FacilitySettings; profile: ProfileInfo }>("/api/settings"),
+    queryFn: () => apiGet<{ facility: FacilitySettings; profile: ProfileInfo; terminology: Record<string, string>; profiles: ProfileOption[] }>("/api/settings"),
   });
 
   const services = useQuery({
-    queryKey: ["services"],
-    queryFn: () => apiGet<{ services: ServiceItem[] }>("/api/services"),
+    queryKey: ["services", "admin"],
+    queryFn: () => apiGet<{ services: ServiceItem[] }>("/api/services?includeInactive=1"),
   });
+
+  useEffect(() => {
+    if (data?.terminology) setTermsForm(data.terminology);
+  }, [data?.terminology]);
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} />;
@@ -427,6 +440,9 @@ export function Settings() {
 
   const f = { ...data.facility, ...form };
   const currentLogo = logoPreview ?? f.logoData ?? null;
+  const currency = session?.user?.currency ?? "NGN";
+  const terminologyKeys = Object.keys(data.terminology ?? {});
+  const termsDirty = terminologyKeys.some((k) => (termsForm[k] ?? "") !== (data.terminology?.[k] ?? ""));
 
   const pickLogo = (file: File | undefined) => {
     if (!file) return;
@@ -435,6 +451,16 @@ export function Settings() {
     const reader = new FileReader();
     reader.onload = () => setLogoPreview(String(reader.result));
     reader.readAsDataURL(file);
+  };
+
+  /** Refresh the session so facility-wide terminology/branding applies everywhere immediately. */
+  const refreshSession = async () => {
+    try {
+      const fresh = await apiGet<SessionInfo>("/api/auth");
+      setSession(fresh ?? { authenticated: false });
+    } catch {
+      // session refresh is best-effort
+    }
   };
 
   const save = async () => {
@@ -451,13 +477,61 @@ export function Settings() {
       });
       toast.success("Settings saved.");
       setLogoPreview(null);
-      const fresh = await apiGet<SessionInfo>("/api/auth");
-      setSession(fresh ?? { authenticated: false });
+      await refreshSession();
       refetch();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveTerminology = async () => {
+    setBusy(true);
+    try {
+      // Only keys that differ from the profile defaults become overrides; matching values clear overrides.
+      const overrides: Record<string, string> = {};
+      for (const k of terminologyKeys) {
+        const v = (termsForm[k] ?? "").trim().slice(0, 60);
+        overrides[k] = v === (data.profile.terminology[k] ?? "").trim() ? "" : v;
+      }
+      await apiSend("PATCH", "/api/settings", { termOverrides: overrides });
+      toast.success("Terminology updated - labels now apply facility-wide.");
+      await refreshSession();
+      refetch();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetTerminology = () => setTermsForm({ ...data.profile.terminology });
+
+  const confirmProfileSwitch = async () => {
+    if (!pendingProfile) return;
+    setBusy(true);
+    try {
+      await apiSend("PATCH", "/api/settings", { serviceProfileKey: pendingProfile });
+      toast.success(`Service profile switched to ${data.profiles.find((p) => p.key === pendingProfile)?.name ?? pendingProfile}.`);
+      setPendingProfile(null);
+      await refreshSession();
+      refetch();
+      void services.refetch();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleService = async (s: ServiceItem) => {
+    try {
+      await apiSend("PATCH", "/api/services", { id: s.id, active: !s.active });
+      toast.success(`"${s.name}" ${s.active ? "deactivated" : "reactivated"}.`);
+      void services.refetch();
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
@@ -523,41 +597,228 @@ export function Settings() {
 
         <div className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Service profile & terminology</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-sm font-medium">{data.profile.name}</p>
-              <p className="text-xs text-muted-foreground">{data.profile.description}</p>
-              <ul className="mt-3 space-y-1 text-sm">
-                {Object.entries(data.profile.terminology).map(([k, v]) => (
-                  <li key={k} className="flex justify-between rounded border px-2.5 py-1 text-xs">
-                    <span className="font-mono text-muted-foreground">{k}</span>
-                    <span className="font-medium">{v}</span>
-                  </li>
-                ))}
-              </ul>
+            <CardHeader>
+              <CardTitle className="text-sm">Service profile & terminology</CardTitle>
+              <p className="text-[11px] text-muted-foreground">Editable labels - changes apply across the whole facility.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="set-profile" className="text-xs">Service profile</Label>
+                <Select value={data.facility.serviceProfileKey} onValueChange={(v) => { if (v !== data.facility.serviceProfileKey) setPendingProfile(v); }}>
+                  <SelectTrigger id="set-profile" aria-label="Service profile"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {data.profiles.map((p) => (
+                      <SelectItem key={p.key} value={p.key}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">{data.profile.description}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Terminology</Label>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {terminologyKeys.map((k) => (
+                    <div key={k} className="space-y-0.5">
+                      <Label htmlFor={`term-${k}`} className="font-mono text-[10px] text-muted-foreground">{k}</Label>
+                      <Input
+                        id={`term-${k}`}
+                        value={termsForm[k] ?? ""}
+                        maxLength={60}
+                        onChange={(e) => setTermsForm({ ...termsForm, [k]: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button size="sm" className="bg-teal-700 hover:bg-teal-800" disabled={busy || !termsDirty} onClick={() => void saveTerminology()}>
+                    {busy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null} Save terminology
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={!termsDirty || busy} onClick={resetTerminology}>
+                    <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset to profile
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-sm">Service catalogue</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-sm">Service catalogue</CardTitle>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Prices and services apply facility-wide, everywhere they are billed or booked.</p>
+              </div>
+              <Button size="sm" className="bg-teal-700 hover:bg-teal-800" onClick={() => setServiceDialog({ mode: "add" })}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add service
+              </Button>
+            </CardHeader>
             <CardContent>
-              <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
-                {(services.data?.services ?? []).map((s) => (
-                  <li key={s.id} className="flex items-center justify-between rounded border px-2.5 py-1.5">
-                    <span>
-                      {s.name}
-                      <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.code}</span>
-                    </span>
-                    <span className="tabular-nums">{formatMoney(s.priceMinor, s.currency)}</span>
-                  </li>
-                ))}
-              </ul>
+              {(services.data?.services ?? []).length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">No services in the catalogue yet.</p>
+              ) : (
+                <div className="max-h-72 overflow-y-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Price</TableHead>
+                        <TableHead className="w-24 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(services.data?.services ?? []).map((s) => (
+                        <TableRow key={s.id} className={s.active === false ? "opacity-50" : ""}>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              <span className={s.active === false ? "line-through" : ""}>{s.name}</span>
+                              <span className="font-mono text-[10px] text-muted-foreground">{s.code}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{s.category}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatMoney(s.priceMinor, s.currency)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`Edit ${s.name}`} onClick={() => setServiceDialog({ mode: "edit", service: s })}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={s.active === false ? `Reactivate ${s.name}` : `Deactivate ${s.name}`} onClick={() => void toggleService(s)}>
+                                <Power className={`h-3.5 w-3.5 ${s.active === false ? "text-teal-700" : "text-stone-400"}`} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
           {can("org:manage") ? <FacilityCredentialCard /> : null}
         </div>
       </div>
+
+      {/* Profile switch confirmation */}
+      <AlertDialog open={!!pendingProfile} onOpenChange={(open) => !open && setPendingProfile(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch service profile?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingProfile ? data.profiles.find((p) => p.key === pendingProfile)?.name : ""} changes the default terminology and the encounter form template for this facility. Existing records keep their data, and the service catalogue is not modified. You can customise terminology afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-teal-700 hover:bg-teal-800" onClick={() => void confirmProfileSwitch()}>Switch profile</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add / edit service dialog */}
+      {serviceDialog ? (
+        <ServiceDialog
+          mode={serviceDialog.mode}
+          service={serviceDialog.mode === "edit" ? serviceDialog.service : null}
+          currency={currency}
+          onClose={() => setServiceDialog(null)}
+          onSaved={async () => {
+            setServiceDialog(null);
+            void services.refetch();
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+// ─── Service catalogue add/edit dialog ──────────────────────────────────────
+
+function ServiceDialog({ mode, service, currency, onClose, onSaved }: {
+  mode: "add" | "edit";
+  service: ServiceItem | null;
+  currency: string;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [code, setCode] = useState(service?.code ?? "");
+  const [name, setName] = useState(service?.name ?? "");
+  const [category, setCategory] = useState<string>(service?.category ?? "CONSULTATION");
+  const [price, setPrice] = useState(service ? (service.priceMinor / 100).toFixed(2) : "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    setErr(null);
+    const priceMinor = Math.round(parseFloat(price) * 100);
+    if (!code.trim() || code.trim().length < 2) { setErr("Code is required (min 2 characters)."); return; }
+    if (!name.trim() || name.trim().length < 2) { setErr("Name is required (min 2 characters)."); return; }
+    if (!Number.isFinite(priceMinor) || priceMinor < 0) { setErr("Enter a valid price (0 or more)."); return; }
+    setBusy(true);
+    try {
+      if (mode === "add") {
+        await apiSend("POST", "/api/services", { code: code.trim(), name: name.trim(), category, priceMinor });
+        toast.success(`Service "${name.trim()}" added to the catalogue.`);
+      } else if (service) {
+        await apiSend("PATCH", "/api/services", { id: service.id, code: code.trim(), name: name.trim(), category, priceMinor });
+        toast.success(`Service "${name.trim()}" updated - the new price applies facility-wide.`);
+      }
+      await onSaved();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{mode === "add" ? "Add service" : "Edit service"}</DialogTitle>
+          <DialogDescription>
+            {mode === "add" ? "New services become available for booking, encounters, billing and the POS." : "Price and detail changes apply across the whole facility immediately."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {err ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{err}</p> : null}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="svc-code">Code</Label>
+              <Input id="svc-code" value={code} maxLength={40} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. CONS-EYE" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="svc-cat">Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger id="svc-cat" aria-label="Category"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SERVICE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="svc-name">Service name</Label>
+            <Input id="svc-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eye Consultation" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="svc-price">Price ({currency})</Label>
+            <Input id="svc-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
+            {mode === "edit" && service ? (
+              <p className="text-[11px] text-muted-foreground">Current: {formatMoney(service.priceMinor, service.currency)}</p>
+            ) : null}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button className="bg-teal-700 hover:bg-teal-800" onClick={() => void submit()} disabled={busy}>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {mode === "add" ? "Add service" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

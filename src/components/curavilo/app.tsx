@@ -56,7 +56,9 @@ export function CuraviloApp() {
       .then(setSession)
       .catch(() => setSession({ authenticated: false }))
       .finally(() => setBooted(true));
-    return () => timer !== undefined && clearTimeout(timer);
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [setSession, setBooted]);
 
   if (!booted) {

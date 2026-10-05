@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiGet, apiSend, formatMoney, formatDateTime, type Encounter as EncounterType, type ServiceItem } from "./api";
 import { LoadingState, ErrorState, EmptyState, PageHeader, StatusBadge } from "./ui-kit";
-import { useApp } from "./store";
+import { useApp, useTerm } from "./store";
 import { toast } from "sonner";
 
 // Encounter form templates (mirrors of lib/service-profiles templates used for rendering)
@@ -20,6 +20,7 @@ import { ENCOUNTER_FORMS } from "./encounter-forms";
 
 export function Encounters() {
   const { navigate, session } = useApp();
+  const encounterPlural = useTerm("encounter.plural");
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["encounters"],
     queryFn: () => apiGet<{ encounters: EncounterType[] }>("/api/encounters"),
@@ -30,7 +31,7 @@ export function Encounters() {
 
   return (
     <div>
-      <PageHeader title="Encounters" subtitle="Clinical records - specialty forms load from the facility service profile." />
+      <PageHeader title={encounterPlural} subtitle="Clinical records - specialty forms load from the facility service profile." />
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
       {data ? (

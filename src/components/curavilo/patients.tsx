@@ -11,13 +11,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiGet, apiSend, ageFrom, type Patient } from "./api";
 import { LoadingState, ErrorState, EmptyState, PageHeader } from "./ui-kit";
-import { useApp } from "./store";
+import { useApp, useTerm } from "./store";
 import { toast } from "sonner";
 
 interface DuplicateWarning { id: string; mrn: string; name: string; phone: string; reason: string }
 
 export function Patients() {
   const { navigate, session } = useApp();
+  const patientLabel = useTerm("patient.plural");
   const tz = session?.user?.timezone ?? "Africa/Lagos";
   const canWrite = session?.user?.permissions.includes("patients:write");
   const [query, setQuery] = useState("");
@@ -31,7 +32,7 @@ export function Patients() {
   return (
     <div>
       <PageHeader
-        title="Patients"
+        title={patientLabel}
         subtitle="Master patient index - search by name, MRN or phone."
         actions={
           canWrite ? (

@@ -1,0 +1,635 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→// Admin views: Workflows (builder), Audit, Settings, Staff, Follow-ups
+     4→     4→import { useEffect, useState } from "react";
+     5→     5→import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+     6→     6→import { Loader2, Play, Plus, CircleCheck, CircleX, Wrench, ThumbsUp, ThumbsDown } from "lucide-react";
+     7→     7→import { Button } from "@/components/ui/button";
+     8→     8→import { Input } from "@/components/ui/input";
+     9→     9→import { Label } from "@/components/ui/label";
+    10→    10→import { Badge } from "@/components/ui/badge";
+    11→    11→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+    12→    12→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+    13→    13→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+    14→    14→import { apiGet, apiSend, formatMoney, formatDate, formatDateTime, type FollowUp, type StaffMember, type ServiceItem, type SessionInfo } from "./api";
+    15→    15→import { LoadingState, ErrorState, EmptyState, PageHeader, StatusBadge } from "./ui-kit";
+    16→    16→import { WorkflowBuilderDialog, type BuilderInitial, type BuilderNode } from "./workflow-builder";
+    17→    17→
+    18→    18→import { useApp, can } from "./store";
+    19→    19→import { toast } from "sonner";
+    20→    20→
+    21→    21→// ─── Workflows ──────────────────────────────────────────────────────────────
+    22→    22→
+    23→    23→interface WorkflowDef { id: string; key: string; name: string; description?: string | null; status: string; version: number; definition: string; slaMinutes?: number | null }
+    24→    24→interface RunNode { nodeKey: string; type: string; status: string; attempts: number; output?: string | null; error?: string | null; wakeAt?: string | null }
+    25→    25→interface WorkflowRun { id: string; status: string; version: number; triggerType: string; startedAt: string; completedAt?: string | null; dryRun: boolean; lastError?: string | null; slaBreachedAt?: string | null; workflowDef: { name: string }; nodes?: RunNode[] }
+    26→    26→interface ApprovalTask { id: string; title: string; description?: string | null; status: string; decision?: string | null; createdAt: string; dueAt?: string | null; source: string }
+    27→    27→
+    28→    28→export function Workflows() {
+    29→    29→  const { session } = useApp();
+    30→    30→  const canManage = session?.user?.permissions.includes("workflows:manage") || session?.user?.permissions.includes("settings:manage");
+    31→    31→  const queryClient = useQueryClient();
+    32→    32→  const [builderOpen, setBuilderOpen] = useState(false);
+    33→    33→  const [editing, setEditing] = useState<WorkflowDef | null>(null);
+    34→    34→
+    35→    35→  const { data, isLoading, isError, error, refetch } = useQuery({
+    36→    36→    queryKey: ["workflows"],
+    37→    37→    queryFn: () => apiGet<{ nodeTypes: string[]; triggers: string[]; workflows: WorkflowDef[]; runs: WorkflowRun[]; approvals: ApprovalTask[] }>("/api/workflows"),
+    38→    38→  });
+    39→    39→
+    40→    40→  const toggle = useMutation({
+    41→    41→    mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "PUBLISH_TOGGLE", workflowId }),
+    42→    42→    onSuccess: () => {
+    43→    43→      toast.success("Workflow state changed.");
+    44→    44→      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    45→    45→    },
+    46→    46→    onError: (e) => toast.error((e as Error).message),
+    47→    47→  });
+    48→    48→
+    49→    49→  const run = useMutation({
+    50→    50→    mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "RUN", workflowId, payload: {} }),
+    51→    51→    onSuccess: () => {
+    52→    52→      toast.success("Workflow run completed - check runs below.");
+    53→    53→      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    54→    54→    },
+    55→    55→    onError: (e) => toast.error((e as Error).message),
+    56→    56→  });
+    57→    57→
+    58→    58→  const decide = useMutation({
+    59→    59→    mutationFn: (input: { taskId: string; decision: "APPROVED" | "REJECTED" }) => apiSend("POST", "/api/workflows", { action: "RESOLVE_APPROVAL", ...input }),
+    60→    60→    onSuccess: () => {
+    61→    61→      toast.success("Decision recorded - the workflow resumed.");
+    62→    62→      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    63→    63→    },
+    64→    64→    onError: (e) => toast.error((e as Error).message),
+    65→    65→  });
+    66→    66→
+    67→    67→  return (
+    68→    68→    <div>
+    69→    69→      <PageHeader
+    70→    70→        title="Workflows"
+    71→    71→        subtitle="Durable, declarative automations - timers, conditions, approvals, retries and SLAs. Publish before they trigger on live events."
+    72→    72→        actions={canManage ? (
+    73→    73→          <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
+    74→    74→            <Plus className="mr-1.5 h-4 w-4" /> Build workflow
+    75→    75→          </Button>
+    76→    76→        ) : null}
+    77→    77→      />
+    78→    78→
+    79→    79→      {isLoading ? <LoadingState /> : null}
+    80→    80→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+    81→    81→
+    82→    82→      {data ? (
+    83→    83→        <div className="space-y-6">
+    84→    84→          <section aria-label="Approvals" className="space-y-2">
+    85→    85→            <h2 className="text-sm font-semibold text-stone-600">Pending approvals</h2>
+    86→    86→            {data.approvals.filter((a) => a.status === "OPEN").length === 0 ? (
+    87→    87→              <p className="rounded-lg border bg-white px-4 py-4 text-center text-xs text-muted-foreground">No approvals waiting.</p>
+    88→    88→            ) : (
+    89→    89→              data.approvals.filter((a) => a.status === "OPEN").map((a) => (
+    90→    90→                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+    91→    91→                  <div>
+    92→    92→                    <p className="text-sm font-medium">{a.title}</p>
+    93→    93→                    <p className="text-xs text-muted-foreground">{a.description}{a.dueAt ? ` · SLA due ${formatDateTime(a.dueAt, session?.user?.timezone)}` : ""}</p>
+    94→    94→                  </div>
+    95→    95→                  {canManage ? (
+    96→    96→                    <div className="flex gap-1.5">
+    97→    97→                      <Button size="sm" variant="outline" onClick={() => decide.mutate({ taskId: a.id, decision: "APPROVED" })} disabled={decide.isPending}>
+    98→    98→                        <ThumbsUp className="mr-1 h-3.5 w-3.5" /> Approve
+    99→    99→                      </Button>
+   100→   100→                      <Button size="sm" variant="outline" className="text-red-700" onClick={() => decide.mutate({ taskId: a.id, decision: "REJECTED" })} disabled={decide.isPending}>
+   101→   101→                        <ThumbsDown className="mr-1 h-3.5 w-3.5" /> Reject
+   102→   102→                      </Button>
+   103→   103→                    </div>
+   104→   104→                  ) : null}
+   105→   105→                </div>
+   106→   106→              ))
+   107→   107→            )}
+   108→   108→          </section>
+   109→   109→
+   110→   110→          <section aria-label="Definitions" className="space-y-2">
+   111→   111→            {data.workflows.length === 0 ? (
+   112→   112→              <EmptyState title="No workflows yet" hint="Build one - e.g. an outpatient flow: create task → notify → wait 24h → create follow-up." />
+   113→   113→            ) : (
+   114→   114→              data.workflows.map((wf) => {
+   115→   115→                let nodeCount = 0;
+   116→   116→                try { nodeCount = (JSON.parse(wf.definition) as { nodes?: unknown[] }).nodes?.length ?? 0; } catch { nodeCount = 0; }
+   117→   117→                return (
+   118→   118→                <div key={wf.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white p-4">
+   119→   119→                  <div>
+   120→   120→                    <div className="flex items-center gap-2">
+   121→   121→                      <span className="font-medium">{wf.name}</span>
+   122→   122→                      <StatusBadge status={wf.status} />
+   123→   123→                      <Badge variant="outline" className="text-[10px]">v{wf.version}</Badge>
+   124→   124→                      <Badge variant="outline" className="text-[10px]">{nodeCount} steps</Badge>
+   125→   125→                    </div>
+   126→   126→                    <p className="mt-0.5 text-xs text-muted-foreground">{wf.description ?? wf.key}</p>
+   127→   127→                  </div>
+   128→   128→                  {canManage ? (
+   129→   129→                    <div className="flex gap-1.5">
+   130→   130→                      <Button size="sm" variant="outline" onClick={() => { setEditing(wf); setBuilderOpen(true); }}>
+   131→   131→                        <Wrench className="mr-1 h-3.5 w-3.5" /> Builder
+   132→   132→                      </Button>
+   133→   133→                      <Button size="sm" variant="outline" onClick={() => toggle.mutate(wf.id)} disabled={toggle.isPending}>
+   134→   134→                        {wf.status === "PUBLISHED" ? "Archive" : "Publish"}
+   135→   135→                      </Button>
+   136→   136→                      <Button size="sm" variant="outline" onClick={() => run.mutate(wf.id)} disabled={run.isPending || wf.status !== "PUBLISHED"}>
+   137→   137→                        <Play className="mr-1 h-3.5 w-3.5" /> Test run
+   138→   138→                      </Button>
+   139→   139→                    </div>
+   140→   140→                  ) : null}
+   141→   141→                </div>
+   142→   142→                );
+   143→   143→              })
+   144→   144→            )}
+   145→   145→          </section>
+   146→   146→
+   147→   147→          <section aria-label="Runs">
+   148→   148→            <h2 className="mb-2 text-sm font-semibold text-stone-600">Recent runs</h2>
+   149→   149→            {data.runs.length === 0 ? (
+   150→   150→              <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-muted-foreground">No runs yet.</p>
+   151→   151→            ) : (
+   152→   152→              <ul className="divide-y overflow-hidden rounded-lg border bg-white text-sm">
+   153→   153→                {data.runs.map((r) => (
+   154→   154→                  <li key={r.id} className="px-3 py-2.5">
+   155→   155→                    <div className="flex flex-wrap items-center justify-between gap-2">
+   156→   156→                      <span>
+   157→   157→                        <span className="font-medium">{r.workflowDef.name}</span>
+   158→   158→                        <span className="ml-2 text-xs text-muted-foreground">{r.triggerType.replaceAll("_", " ")} · {formatDateTime(r.startedAt, session?.user?.timezone)}</span>
+   159→   159→                        {r.slaBreachedAt ? <Badge variant="outline" className="ml-1.5 border-red-200 bg-red-50 text-[10px] text-red-700">SLA breached</Badge> : null}
+   160→   160→                      </span>
+   161→   161→                      <StatusBadge status={r.status} />
+   162→   162→                    </div>
+   163→   163→                    {r.nodes && r.nodes.length > 0 ? (
+   164→   164→                      <ol className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+   165→   165→                        {r.nodes.map((n, i) => (
+   166→   166→                          <li key={i} className="flex items-center gap-2">
+   167→   167→                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${n.status === "COMPLETED" ? "bg-emerald-500" : n.status === "FAILED" ? "bg-red-500" : n.status === "PENDING" ? "bg-stone-300" : "bg-amber-400"}`} aria-hidden />
+   168→   168→                            <span>{n.nodeKey} · {n.type.replaceAll("_", " ")} · {n.status.toLowerCase()}{n.attempts > 1 ? ` (attempt ${n.attempts})` : ""}</span>
+   169→   169→                            {n.output ? <span className="truncate">- {n.output.slice(0, 70)}</span> : null}
+   170→   170→                            {n.error ? <span className="text-red-600">- {n.error.slice(0, 60)}</span> : null}
+   171→   171→                          </li>
+   172→   172→                        ))}
+   173→   173→                      </ol>
+   174→   174→                    ) : null}
+   175→   175→                    {r.lastError ? <p className="mt-1 text-xs text-red-600">{r.lastError}</p> : null}
+   176→   176→                  </li>
+   177→   177→                ))}
+   178→   178→              </ul>
+   179→   179→            )}
+   180→   180→          </section>
+   181→   181→        </div>
+   182→   182→      ) : null}
+   183→   183→
+   184→   184→      <WorkflowBuilderDialog
+   185→   185→        open={builderOpen}
+   186→   186→        onClose={() => setBuilderOpen(false)}
+   187→   187→        initial={editing ? { workflowId: editing.id, key: editing.key, name: editing.name, definition: safeParse(editing.definition)?.definition, slaMinutes: editing.slaMinutes } : undefined}
+   188→   188→      />
+   189→   189→    </div>
+   190→   190→  );
+   191→   191→}
+   192→   192→
+   193→   193→function safeParse(def: string): BuilderInitial | undefined {
+   194→   194→  try {
+   195→   195→    const parsed = JSON.parse(def) as { trigger?: string; nodes?: Array<{ id: string; type: string; config: Record<string, unknown> }>; schedule?: { everyMinutes?: number; dailyAt?: string } };
+   196→   196→    return {
+   197→   197→      definition: {
+   198→   198→        ...parsed,
+   199→   199→        nodes: parsed.nodes?.map((n) => ({ id: n.id, type: n.type as BuilderNode["type"], config: Object.fromEntries(Object.entries(n.config ?? {}).map(([k, v]) => [k, String(v)])) })),
+   200→   200→      },
+   201→   201→    };
+   202→   202→  } catch {
+   203→   203→    return undefined;
+   204→   204→  }
+   205→   205→}
+   206→   206→
+   207→   207→// ─── Audit ──────────────────────────────────────────────────────────────────
+   208→   208→
+   209→   209→interface AuditEvent { id: string; action: string; entityType: string; entityId?: string | null; summary: string; actorLabel?: string | null; createdAt: string }
+   210→   210→
+   211→   211→export function Audit() {
+   212→   212→  const { session } = useApp();
+   213→   213→  const [actionFilter, setActionFilter] = useState("");
+   214→   214→  const { data, isLoading, isError, error, refetch } = useQuery({
+   215→   215→    queryKey: ["audit", actionFilter],
+   216→   216→    queryFn: () => apiGet<{ events: AuditEvent[] }>(`/api/audit?action=${encodeURIComponent(actionFilter)}&limit=150`),
+   217→   217→  });
+   218→   218→
+   219→   219→  return (
+   220→   220→    <div>
+   221→   221→      <PageHeader title="Audit Log" subtitle="Append-only record of who did what, when, and to which record." />
+   222→   222→      <Input placeholder="Filter by action (e.g. payment, ai, encounter)…" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="mb-4 max-w-sm" aria-label="Filter audit events" />
+   223→   223→      {isLoading ? <LoadingState /> : null}
+   224→   224→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+   225→   225→      {data ? (
+   226→   226→        data.events.length === 0 ? (
+   227→   227→          <EmptyState title="No audit events" hint="Events appear as staff use the system." />
+   228→   228→        ) : (
+   229→   229→          <ul className="overflow-hidden rounded-lg border bg-white divide-y text-sm">
+   230→   230→            {data.events.map((ev) => (
+   231→   231→              <li key={ev.id} className="px-3 py-2.5">
+   232→   232→                <div className="flex flex-wrap items-center justify-between gap-2">
+   233→   233→                  <span>
+   234→   234→                    <Badge variant="outline" className="mr-2 text-[10px]">{ev.action}</Badge>
+   235→   235→                    <span className="text-xs text-muted-foreground">{ev.entityType}</span>
+   236→   236→                  </span>
+   237→   237→                  <span className="text-xs text-muted-foreground">{formatDateTime(ev.createdAt, session?.user?.timezone)}</span>
+   238→   238→                </div>
+   239→   239→                <p className="mt-0.5 text-stone-700">{ev.summary}</p>
+   240→   240→                {ev.actorLabel ? <p className="text-[11px] text-muted-foreground">by {ev.actorLabel}</p> : null}
+   241→   241→              </li>
+   242→   242→            ))}
+   243→   243→          </ul>
+   244→   244→        )
+   245→   245→      ) : null}
+   246→   246→    </div>
+   247→   247→  );
+   248→   248→}
+   249→   249→
+   250→   250→// ─── Staff ──────────────────────────────────────────────────────────────────
+   251→   251→
+   252→   252→export function ClinicalDirectory() {
+   253→   253→  const { session } = useApp();
+   254→   254→  const canManage = session?.user?.permissions.includes("staff:manage");
+   255→   255→  const [open, setOpen] = useState(false);
+   256→   256→  const [form, setForm] = useState({ name: "", designation: "DOCTOR", department: "" });
+   257→   257→  const queryClient = useQueryClient();
+   258→   258→
+   259→   259→  const { data, isLoading, isError, error, refetch } = useQuery({
+   260→   260→    queryKey: ["staff"],
+   261→   261→    queryFn: () => apiGet<{ staff: StaffMember[] }>("/api/staff"),
+   262→   262→  });
+   263→   263→
+   264→   264→  const create = useMutation({
+   265→   265→    mutationFn: () => apiSend("POST", "/api/staff", { name: form.name.trim(), designation: form.designation, department: form.department.trim() || null }),
+   266→   266→    onSuccess: () => {
+   267→   267→      toast.success("Staff member added.");
+   268→   268→      setOpen(false);
+   269→   269→      setForm({ name: "", designation: "DOCTOR", department: "" });
+   270→   270→      queryClient.invalidateQueries({ queryKey: ["staff"] });
+   271→   271→    },
+   272→   272→    onError: (e) => toast.error((e as Error).message),
+   273→   273→  });
+   274→   274→
+   275→   275→  return (
+   276→   276→    <div>
+   277→   277→      <PageHeader
+   278→   278→        title="Staff"
+   279→   279→        subtitle="Facility directory used for assignments and schedules."
+   280→   280→        actions={canManage ? <Button className="bg-teal-700 hover:bg-teal-800" onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" /> Add staff</Button> : null}
+   281→   281→      />
+   282→   282→      {isLoading ? <LoadingState /> : null}
+   283→   283→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+   284→   284→      {data ? (
+   285→   285→        data.staff.length === 0 ? (
+   286→   286→          <EmptyState title="No staff records" hint={canManage ? "Add your first staff member." : undefined} />
+   287→   287→        ) : (
+   288→   288→          <div className="overflow-hidden rounded-lg border bg-white">
+   289→   289→            <Table>
+   290→   290→              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Designation</TableHead><TableHead className="hidden sm:table-cell">Department</TableHead></TableRow></TableHeader>
+   291→   291→              <TableBody>
+   292→   292→                {data.staff.map((s) => (
+   293→   293→                  <TableRow key={s.id}>
+   294→   294→                    <TableCell className="font-medium">{s.name}</TableCell>
+   295→   295→                    <TableCell>{s.designation.replaceAll("_", " ")}</TableCell>
+   296→   296→                    <TableCell className="hidden sm:table-cell">{s.department ?? "-"}</TableCell>
+   297→   297→                  </TableRow>
+   298→   298→                ))}
+   299→   299→              </TableBody>
+   300→   300→            </Table>
+   301→   301→          </div>
+   302→   302→        )
+   303→   303→      ) : null}
+   304→   304→
+   305→   305→      <Dialog open={open} onOpenChange={setOpen}>
+   306→   306→        <DialogContent className="sm:max-w-sm">
+   307→   307→          <DialogHeader><DialogTitle>Add staff member</DialogTitle></DialogHeader>
+   308→   308→          <div className="space-y-3">
+   309→   309→            <div className="space-y-1">
+   310→   310→              <Label htmlFor="st-name">Name *</Label>
+   311→   311→              <Input id="st-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+   312→   312→            </div>
+   313→   313→            <div className="grid grid-cols-2 gap-3">
+   314→   314→              <div className="space-y-1">
+   315→   315→                <Label htmlFor="st-desig">Designation</Label>
+   316→   316→                <select id="st-desig" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+   317→   317→                  {["DOCTOR", "NURSE", "OPTOMETRIST", "RECEPTIONIST", "PHARMACIST", "LAB_SCIENTIST", "CASHIER", "ADMIN", "OTHER"].map((d) => (
+   318→   318→                    <option key={d} value={d}>{d.replaceAll("_", " ")}</option>
+   319→   319→                  ))}
+   320→   320→                </select>
+   321→   321→              </div>
+   322→   322→              <div className="space-y-1">
+   323→   323→                <Label htmlFor="st-dept">Department</Label>
+   324→   324→                <Input id="st-dept" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+   325→   325→              </div>
+   326→   326→            </div>
+   327→   327→          </div>
+   328→   328→          <DialogFooter>
+   329→   329→            <Button className="bg-teal-700 hover:bg-teal-800" disabled={create.isPending || !form.name.trim()} onClick={() => create.mutate()}>
+   330→   330→              {create.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Add
+   331→   331→            </Button>
+   332→   332→          </DialogFooter>
+   333→   333→        </DialogContent>
+   334→   334→      </Dialog>
+   335→   335→    </div>
+   336→   336→  );
+   337→   337→}
+   338→   338→
+   339→   339→// ─── Follow-ups ─────────────────────────────────────────────────────────────
+   340→   340→
+   341→   341→export function FollowUps() {
+   342→   342→  const { session, navigate } = useApp();
+   343→   343→  const canWrite = session?.user?.permissions.includes("encounters:write");
+   344→   344→  const queryClient = useQueryClient();
+   345→   345→  const { data, isLoading, isError, error, refetch } = useQuery({
+   346→   346→    queryKey: ["followups"],
+   347→   347→    queryFn: () => apiGet<{ followUps: FollowUp[] }>("/api/followups?status=PENDING"),
+   348→   348→  });
+   349→   349→
+   350→   350→  const update = useMutation({
+   351→   351→    mutationFn: ({ followUpId, status }: { followUpId: string; status: string }) => apiSend("PATCH", "/api/followups", { followUpId, status }),
+   352→   352→    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["followups"] }),
+   353→   353→    onError: (e) => toast.error((e as Error).message),
+   354→   354→  });
+   355→   355→
+   356→   356→  const now = new Date();
+   357→   357→
+   358→   358→  return (
+   359→   359→    <div>
+   360→   360→      <PageHeader title="Follow-ups" subtitle="Pending reviews - overdue ones are highlighted." />
+   361→   361→      {isLoading ? <LoadingState /> : null}
+   362→   362→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+   363→   363→      {data ? (
+   364→   364→        data.followUps.length === 0 ? (
+   365→   365→          <EmptyState title="No pending follow-ups" hint="Follow-ups are created from completed encounters and workflows." />
+   366→   366→        ) : (
+   367→   367→          <ul className="space-y-2">
+   368→   368→            {data.followUps.map((f) => {
+   369→   369→              const overdue = new Date(f.dueAt) < now;
+   370→   370→              return (
+   371→   371→                <li key={f.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-white p-3 text-sm ${overdue ? "border-amber-300" : ""}`}>
+   372→   372→                  <span>
+   373→   373→                    <button className="font-medium hover:text-teal-700 hover:underline" onClick={() => navigate("patient-detail", { patientId: f.patientId })}>
+   374→   374→                      {f.patient ? `${f.patient.firstName} ${f.patient.lastName}` : "Patient"}
+   375→   375→                    </button>
+   376→   376→                    <span className="ml-2 text-muted-foreground">{f.title} · due {formatDate(f.dueAt, session?.user?.timezone)}</span>
+   377→   377→                    {overdue ? <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-700">Overdue</Badge> : null}
+   378→   378→                  </span>
+   379→   379→                  {canWrite ? (
+   380→   380→                    <span className="flex gap-1.5">
+   381→   381→                      <Button size="sm" variant="outline" onClick={() => update.mutate({ followUpId: f.id, status: "COMPLETED" })}>
+   382→   382→                        <CircleCheck className="mr-1 h-3.5 w-3.5" /> Done
+   383→   383→                      </Button>
+   384→   384→                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => update.mutate({ followUpId: f.id, status: "CANCELLED" })}>
+   385→   385→                        <CircleX className="mr-1 h-3.5 w-3.5" /> Cancel
+   386→   386→                      </Button>
+   387→   387→                    </span>
+   388→   388→                  ) : null}
+   389→   389→                </li>
+   390→   390→              );
+   391→   391→            })}
+   392→   392→          </ul>
+   393→   393→        )
+   394→   394→      ) : null}
+   395→   395→    </div>
+   396→   396→  );
+   397→   397→}
+   398→   398→
+   399→   399→// ─── Settings ───────────────────────────────────────────────────────────────
+   400→   400→
+   401→   401→interface FacilitySettings {
+   402→   402→  id: string; name: string; address?: string | null; phone?: string | null; email?: string | null;
+   403→   403→  logoData?: string | null; reportFooter?: string | null; receiptFooter?: string | null; serviceProfileKey: string;
+   404→   404→}
+   405→   405→interface ProfileInfo { name: string; description: string; terminology: Record<string, string> }
+   406→   406→
+   407→   407→export function Settings() {
+   408→   408→  const { session, setSession } = useApp();
+   409→   409→  const [form, setForm] = useState<Partial<FacilitySettings>>({});
+   410→   410→  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+   411→   411→  const [busy, setBusy] = useState(false);
+   412→   412→  const fileRef = useState<HTMLInputElement | null>(null);
+   413→   413→
+   414→   414→  const { data, isLoading, isError, error, refetch } = useQuery({
+   415→   415→    queryKey: ["settings"],
+   416→   416→    queryFn: () => apiGet<{ facility: FacilitySettings; profile: ProfileInfo }>("/api/settings"),
+   417→   417→  });
+   418→   418→
+   419→   419→  const services = useQuery({
+   420→   420→    queryKey: ["services"],
+   421→   421→    queryFn: () => apiGet<{ services: ServiceItem[] }>("/api/services"),
+   422→   422→  });
+   423→   423→
+   424→   424→  if (isLoading) return <LoadingState />;
+   425→   425→  if (isError) return <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} />;
+   426→   426→  if (!data) return null;
+   427→   427→
+   428→   428→  const f = { ...data.facility, ...form };
+   429→   429→  const currentLogo = logoPreview ?? f.logoData ?? null;
+   430→   430→
+   431→   431→  const pickLogo = (file: File | undefined) => {
+   432→   432→    if (!file) return;
+   433→   433→    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { toast.error("Logo must be PNG, JPEG or WebP."); return; }
+   434→   434→    if (file.size > 280_000) { toast.error("Logo must be smaller than 280 KB."); return; }
+   435→   435→    const reader = new FileReader();
+   436→   436→    reader.onload = () => setLogoPreview(String(reader.result));
+   437→   437→    reader.readAsDataURL(file);
+   438→   438→  };
+   439→   439→
+   440→   440→  const save = async () => {
+   441→   441→    setBusy(true);
+   442→   442→    try {
+   443→   443→      await apiSend("PATCH", "/api/settings", {
+   444→   444→        name: f.name,
+   445→   445→        address: f.address ?? null,
+   446→   446→        phone: f.phone ?? null,
+   447→   447→        email: f.email ?? "",
+   448→   448→        logoData: currentLogo ?? "",
+   449→   449→        reportFooter: f.reportFooter ?? null,
+   450→   450→        receiptFooter: f.receiptFooter ?? null,
+   451→   451→      });
+   452→   452→      toast.success("Settings saved.");
+   453→   453→      setLogoPreview(null);
+   454→   454→      const fresh = await apiGet<SessionInfo>("/api/auth");
+   455→   455→      setSession(fresh ?? { authenticated: false });
+   456→   456→      refetch();
+   457→   457→    } catch (e) {
+   458→   458→      toast.error((e as Error).message);
+   459→   459→    } finally {
+   460→   460→      setBusy(false);
+   461→   461→    }
+   462→   462→  };
+   463→   463→
+   464→   464→  return (
+   465→   465→    <div>
+   466→   466→      <PageHeader title="Settings" subtitle="Facility profile, branding, terminology and service catalogue." />
+   467→   467→      <div className="grid gap-4 lg:grid-cols-2">
+   468→   468→        <Card>
+   469→   469→          <CardHeader><CardTitle className="text-sm">Facility profile & branding</CardTitle></CardHeader>
+   470→   470→          <CardContent className="space-y-3">
+   471→   471→            <div className="flex items-center gap-4">
+   472→   472→              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-dashed bg-stone-50">
+   473→   473→                {currentLogo ? (
+   474→   474→                   
+   475→   475→                  <img src={currentLogo} alt="Facility logo" className="h-full w-full object-contain" />
+   476→   476→                ) : (
+   477→   477→                  <span className="text-xs text-stone-400">No logo</span>
+   478→   478→                )}
+   479→   479→              </div>
+   480→   480→              <div>
+   481→   481→                <input
+   482→   482→                  type="file"
+   483→   483→                  accept="image/png,image/jpeg,image/webp"
+   484→   484→                  className="hidden"
+   485→   485→                  ref={(el) => { fileRef[0] = el; }}
+   486→   486→                  onChange={(e) => pickLogo(e.target.files?.[0])}
+   487→   487→                />
+   488→   488→                <Button variant="outline" size="sm" onClick={() => fileRef[0]?.click()}>Upload logo</Button>
+   489→   489→                <p className="mt-1 text-[11px] text-muted-foreground">PNG/JPEG/WebP, max 280 KB. SVG rejected for safety.</p>
+   490→   490→              </div>
+   491→   491→            </div>
+   492→   492→            <div className="space-y-1">
+   493→   493→              <Label htmlFor="set-name">Facility name</Label>
+   494→   494→              <Input id="set-name" value={f.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+   495→   495→            </div>
+   496→   496→            <div className="space-y-1">
+   497→   497→              <Label htmlFor="set-address">Address</Label>
+   498→   498→              <Input id="set-address" value={f.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+   499→   499→            </div>
+   500→   500→            <div className="grid grid-cols-2 gap-3">
+   501→   501→              <div className="space-y-1">
+   502→   502→                <Label htmlFor="set-phone">Phone</Label>
+   503→   503→                <Input id="set-phone" value={f.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+   504→   504→              </div>
+   505→   505→              <div className="space-y-1">
+   506→   506→                <Label htmlFor="set-email">Email</Label>
+   507→   507→                <Input id="set-email" value={f.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+   508→   508→              </div>
+   509→   509→            </div>
+   510→   510→            <div className="space-y-1">
+   511→   511→              <Label htmlFor="set-rf">Report footer</Label>
+   512→   512→              <Input id="set-rf" value={f.reportFooter ?? ""} onChange={(e) => setForm({ ...form, reportFooter: e.target.value })} />
+   513→   513→            </div>
+   514→   514→            <div className="space-y-1">
+   515→   515→              <Label htmlFor="set-rf2">Receipt footer</Label>
+   516→   516→              <Input id="set-rf2" value={f.receiptFooter ?? ""} onChange={(e) => setForm({ ...form, receiptFooter: e.target.value })} />
+   517→   517→            </div>
+   518→   518→            <Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={busy} onClick={() => void save()}>
+   519→   519→              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save settings
+   520→   520→            </Button>
+   521→   521→          </CardContent>
+   522→   522→        </Card>
+   523→   523→
+   524→   524→        <div className="space-y-4">
+   525→   525→          <Card>
+   526→   526→            <CardHeader><CardTitle className="text-sm">Service profile & terminology</CardTitle></CardHeader>
+   527→   527→            <CardContent>
+   528→   528→              <p className="text-sm font-medium">{data.profile.name}</p>
+   529→   529→              <p className="text-xs text-muted-foreground">{data.profile.description}</p>
+   530→   530→              <ul className="mt-3 space-y-1 text-sm">
+   531→   531→                {Object.entries(data.profile.terminology).map(([k, v]) => (
+   532→   532→                  <li key={k} className="flex justify-between rounded border px-2.5 py-1 text-xs">
+   533→   533→                    <span className="font-mono text-muted-foreground">{k}</span>
+   534→   534→                    <span className="font-medium">{v}</span>
+   535→   535→                  </li>
+   536→   536→                ))}
+   537→   537→              </ul>
+   538→   538→            </CardContent>
+   539→   539→          </Card>
+   540→   540→
+   541→   541→          <Card>
+   542→   542→            <CardHeader><CardTitle className="text-sm">Service catalogue</CardTitle></CardHeader>
+   543→   543→            <CardContent>
+   544→   544→              <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
+   545→   545→                {(services.data?.services ?? []).map((s) => (
+   546→   546→                  <li key={s.id} className="flex items-center justify-between rounded border px-2.5 py-1.5">
+   547→   547→                    <span>
+   548→   548→                      {s.name}
+   549→   549→                      <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.code}</span>
+   550→   550→                    </span>
+   551→   551→                    <span className="tabular-nums">{formatMoney(s.priceMinor, s.currency)}</span>
+   552→   552→                  </li>
+   553→   553→                ))}
+   554→   554→              </ul>
+   555→   555→            </CardContent>
+   556→   556→          </Card>
+   557→   557→          {can("org:manage") ? <FacilityCredentialCard /> : null}
+   558→   558→        </div>
+   559→   559→      </div>
+   560→   560→    </div>
+   561→   561→  );
+   562→   562→}
+   563→   563→
+   564→   564→// ─── Facility access credential (owner-only, ADR 0011) ─────────────────────
+   565→   565→
+   566→   566→function FacilityCredentialCard() {
+   567→   567→  const [email, setEmail] = useState("");
+   568→   568→  const [password, setPassword] = useState("");
+   569→   569→  const [confirm, setConfirm] = useState("");
+   570→   570→  const [busy, setBusy] = useState(false);
+   571→   571→  const [loading, setLoading] = useState(true);
+   572→   572→
+   573→   573→  useEffect(() => {
+   574→   574→    let active = true;
+   575→   575→    apiGet<{ credentialEmail: string | null }>("/api/facility-credential")
+   576→   576→      .then((r) => { if (active) { setEmail(r.credentialEmail ?? ""); setLoading(false); } })
+   577→   577→      .catch(() => active && setLoading(false));
+   578→   578→    return () => { active = false; };
+   579→   579→  }, []);
+   580→   580→
+   581→   581→  const save = async () => {
+   582→   582→    if (password && password !== confirm) {
+   583→   583→      toast.error("New passwords do not match.");
+   584→   584→      return;
+   585→   585→    }
+   586→   586→    setBusy(true);
+   587→   587→    try {
+   588→   588→      await apiSend("PATCH", "/api/facility-credential", {
+   589→   589→        ...(email ? { email } : {}),
+   590→   590→        ...(password ? { password } : {}),
+   591→   591→      });
+   592→   592→      toast.success("Facility access credential updated.");
+   593→   593→      setPassword("");
+   594→   594→      setConfirm("");
+   595→   595→    } catch (e) {
+   596→   596→      toast.error((e as Error).message);
+   597→   597→    } finally {
+   598→   598→      setBusy(false);
+   599→   599→    }
+   600→   600→  };
+   601→   601→
+   602→   602→  return (
+   603→   603→    <Card>
+   604→   604→      <CardHeader><CardTitle className="text-sm">Facility access credential</CardTitle></CardHeader>
+   605→   605→      <CardContent className="space-y-3">
+   606→   606→        <p className="text-xs text-muted-foreground">
+   607→   607→          This is the workspace credential used at the facility access gate (step 1 of sign-in). It opens
+   608→   608→          the facility only - it never grants staff permissions. Owner-only, changeable at any time.
+   609→   609→        </p>
+   610→   610→        {loading ? <LoadingState /> : (
+   611→   611→          <>
+   612→   612→            <div className="space-y-1">
+   613→   613→              <Label htmlFor="cred-email">Facility gate email</Label>
+   614→   614→              <Input id="cred-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+   615→   615→            </div>
+   616→   616→            <div className="grid grid-cols-2 gap-3">
+   617→   617→              <div className="space-y-1">
+   618→   618→                <Label htmlFor="cred-pass">New gate password</Label>
+   619→   619→                <Input id="cred-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep" />
+   620→   620→              </div>
+   621→   621→              <div className="space-y-1">
+   622→   622→                <Label htmlFor="cred-confirm">Confirm password</Label>
+   623→   623→                <Input id="cred-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+   624→   624→              </div>
+   625→   625→            </div>
+   626→   626→            <Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={busy || (!password && !email)} onClick={() => void save()}>
+   627→   627→              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Update facility credential
+   628→   628→            </Button>
+   629→   629→          </>
+   630→   630→        )}
+   631→   631→      </CardContent>
+   632→   632→    </Card>
+   633→   633→  );
+   634→   634→}
+   635→   635→

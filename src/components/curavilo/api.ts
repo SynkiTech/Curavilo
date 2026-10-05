@@ -55,6 +55,8 @@ export interface SessionInfo {
     reportFooter?: string | null;
     receiptFooter?: string | null;
   };
+  /** Facility-wide terminology labels (profile defaults merged with the facility's overrides). */
+  terminology?: Record<string, string>;
 }
 
 export class ApiError extends Error {
@@ -216,6 +218,7 @@ export interface PurchaseOrder {
 
 export interface ServiceItem {
   id: string; code: string; name: string; category: string; priceMinor: number; currency: string;
+  active?: boolean;
 }
 
 export interface StaffMember {

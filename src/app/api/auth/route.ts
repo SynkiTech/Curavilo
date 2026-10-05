@@ -14,6 +14,7 @@ import { canAuthenticate } from "@/lib/rbac";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { audit } from "@/lib/audit";
 import { registerOrganization, registerSchema } from "@/modules/org";
+import { resolveTerminology } from "@/lib/service-profiles";
 
 const loginSchema = z.object({
   email: z.string().email().max(120),
@@ -95,6 +96,8 @@ export async function GET() {
         reportFooter: activeFacility?.reportFooter ?? null,
         receiptFooter: activeFacility?.receiptFooter ?? null,
       },
+      // Facility-wide terminology (profile defaults merged with the facility's overrides)
+      terminology: resolveTerminology(ctx.serviceProfileKey, activeFacility?.termOverrides ?? null),
     });
   } catch (error) {
     return fail(error);

@@ -44,3 +44,28 @@ export function user(): SessionUser | null {
 export function can(permission: string): boolean {
   return !!useApp.getState().session?.user?.permissions.includes(permission);
 }
+
+// ─── Facility terminology (settings-driven labels, reflect facility-wide) ───
+
+const TERMINOLOGY_DEFAULTS: Record<string, string> = {
+  "patient.label": "Patient",
+  "patient.plural": "Patients",
+  "visit.label": "Visit",
+  "consultation.label": "Consultation",
+  "examination.label": "Examination",
+  "procedure.label": "Procedure",
+  "department.label": "Department",
+  "followup.label": "Follow-up",
+  "doctor.label": "Doctor",
+  "encounter.label": "Encounter",
+};
+
+/** Resolve a terminology key for the signed-in facility (server-merged, defaults as fallback). */
+export function term(key: string): string {
+  return useApp.getState().session?.terminology?.[key] ?? TERMINOLOGY_DEFAULTS[key] ?? key;
+}
+
+/** React hook variant - re-renders when the session (terminology) changes. */
+export function useTerm(key: string): string {
+  return useApp((s) => s.session?.terminology?.[key] ?? TERMINOLOGY_DEFAULTS[key] ?? key);
+}

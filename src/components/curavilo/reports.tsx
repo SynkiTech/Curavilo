@@ -3,7 +3,7 @@
 // Reports - revenue, patient volume, pharmacy sales (deterministic, printable) (spec §32)
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Download, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { apiGet, formatMoney, formatDate, formatDateTime } from "./api";
 import { LoadingState, ErrorState, PageHeader, StatCard } from "./ui-kit";
 import { PagePrintButton } from "./print";
+import { buildReportCsv, downloadTextFile } from "./report-export";
 import { useApp } from "./store";
+import { toast } from "sonner";
 
 function monthBounds(): { from: string; to: string } {
   const now = new Date();
@@ -39,12 +41,44 @@ export function Reports() {
     { key: "pharmacy", label: "Pharmacy sales", perm: "pos:sell" },
   ] as const).filter((t) => !t.perm || perms.includes(t.perm));
 
+  const timezone = user?.timezone ?? "Africa/Lagos";
+  const currency = user?.currency ?? "NGN";
+  const period = `${formatDate(range.from)} to ${formatDate(range.to)}`;
+
+  const exportCsv = () => {
+    if (!data) { toast.error("Load the report first, then export."); return; }
+    try {
+      const csv = buildReportCsv(type, data, currency, period, timezone);
+      downloadTextFile(`curavilo-${type}-report-${range.from}-to-${range.to}.csv`, csv);
+      toast.success("CSV exported.");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not build the CSV file.");
+    }
+  };
+
+  const exportPdf = () => {
+    if (!data) { toast.error("Load the report first, then export."); return; }
+    // Opens the browser print dialog - choose "Save as PDF" as the destination.
+    // Paper size/orientation come from the page print settings gear.
+    window.print();
+  };
+
   return (
     <div className="print-area-parent">
       <PageHeader
         title="Reports"
         subtitle="Deterministic figures computed from the ledgers - never estimated."
-        actions={<PagePrintButton />}
+        actions={
+          <div className="flex items-center gap-1.5 no-print">
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!data} aria-label="Export as CSV">
+              <Download className="mr-2 h-4 w-4" /> CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportPdf} disabled={!data} aria-label="Export as PDF (opens print dialog)">
+              <FileText className="mr-2 h-4 w-4" /> PDF
+            </Button>
+            <PagePrintButton />
+          </div>
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3 no-print">
@@ -73,7 +107,7 @@ export function Reports() {
 
       {isLoading ? <LoadingState /> : null}
       {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
-      {data ? <ReportBody type={type} data={data} currency={user?.currency ?? "NGN"} timezone={user?.timezone ?? "Africa/Lagos"} period={`${formatDate(range.from)} to ${formatDate(range.to)}`} /> : null}
+      {data ? <ReportBody type={type} data={data} currency={currency} timezone={timezone} period={period} /> : null}
     </div>
   );
 }

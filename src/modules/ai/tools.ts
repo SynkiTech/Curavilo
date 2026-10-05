@@ -333,6 +333,90 @@ export const AI_TOOLS: ToolDef[] = [
       };
     },
   },
+  {
+    // Knowledge tool: clinical decision support, drug/dosing questions, guidelines research,
+    // Curavilo platform how-to, and general factual questions. Backed by live web research.
+    name: "knowledge.research",
+    description:
+      "Research a question for professional use. mode=clinical for medical/clinical questions (diagnosis support, differentials, workup, dosing, guidelines - requires healthcare-professional permissions for personalized answers), mode=platform for Curavilo how-to questions (no search needed), mode=general for any other factual question. Provide a concise self-contained search query.",
+    permission: "ai:ask",
+    params: z.object({
+      mode: z.enum(["clinical", "platform", "general"]).default("general"),
+      query: z.string().min(2).max(300),
+    }).strict(),
+    provenanceFields: ["mode"],
+    exec: async (ctx, raw) => {
+      const params = z.object({
+        mode: z.enum(["clinical", "platform", "general"]).default("general"),
+        query: z.string().min(2).max(300),
+      }).strict().parse(raw);
+      // Clinical personalization is reserved for healthcare professionals; others get general info.
+      const clinicalProfessional =
+        ctx.permissions.includes("encounters:write") ||
+        ctx.permissions.includes("lab:operate") ||
+        ctx.permissions.includes("inpatient:manage");
+
+      if (params.mode === "platform") {
+        return {
+          data: {
+            mode: params.mode,
+            platform: true,
+            facility: { name: ctx.facilityName, role: ctx.role },
+            note: "Answer from Curavilo product knowledge. No live search needed.",
+          },
+          provenance: { source: "Curavilo platform knowledge", filters: { mode: params.mode } },
+        };
+      }
+
+      if (params.mode === "clinical" && !clinicalProfessional) {
+        return {
+          data: {
+            mode: params.mode,
+            clinicalAccess: false,
+            note: "User is not a healthcare professional: provide general, non-personalized health information only and advise consulting a licensed clinician.",
+          },
+          provenance: { source: "General health information", filters: { mode: params.mode } },
+        };
+      }
+
+      // Live research for clinical/general questions (best effort - degrade gracefully)
+      let results: Array<{ title: string; snippet: string; url: string; date?: string }> = [];
+      try {
+        const ZAI = (await import("z-ai-web-dev-sdk")).default;
+        const zai = await ZAI.create();
+        const search = await zai.functions.invoke("web_search", {
+          query: params.query.slice(0, 200),
+          num: 6,
+          ...(params.mode === "clinical" ? { recency_days: 1095 } : {}),
+        });
+        results = (Array.isArray(search) ? search : []).slice(0, 6).map((r) => ({
+          title: String(r?.name ?? "Source").slice(0, 160),
+          snippet: String(r?.snippet ?? "").slice(0, 400),
+          url: String(r?.url ?? "").slice(0, 300),
+          ...(r?.date ? { date: String(r.date).slice(0, 40) } : {}),
+        })).filter((r) => r.title || r.url);
+      } catch {
+        results = [];
+      }
+      return {
+        data: {
+          mode: params.mode,
+          clinicalAccess: true,
+          searchedAt: new Date().toISOString(),
+          results,
+          note: results.length
+            ? "Synthesize with professional medical knowledge; prefer the search results for recent numbers, doses and guideline updates."
+            : "Live research was unavailable - answer from professional knowledge and say the answer could not be verified against live sources.",
+        },
+        provenance: {
+          source: results.length ? "Live web research" : "Professional knowledge (live research unavailable)",
+          filters: { mode: params.mode, query: params.query.slice(0, 120) },
+          recordCount: results.length,
+          results: results.map((r) => ({ title: r.title, url: r.url })),
+        },
+      };
+    },
+  },
 ];
 
 /** Permission-gated, zod-validated, row-limited execution. Throws AppError on denial. */

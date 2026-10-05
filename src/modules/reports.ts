@@ -124,6 +124,7 @@ export async function revenueReport(ctx: AuthContext, from: Date, to: Date) {
       createdAt: p.createdAt, invoiceNumber: p.invoice?.number, patient: p.invoice?.patient ? `${p.invoice.patient.firstName} ${p.invoice.patient.lastName}` : null,
     })),
     totalMinor,
+    paymentCount: payments.length,
     byMethod,
     invoicesIssued,
     outstandingMinor: (outstandingAgg._sum.totalMinor ?? 0) - (outstandingAgg._sum.amountPaidMinor ?? 0),
