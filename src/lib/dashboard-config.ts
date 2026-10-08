@@ -19,7 +19,9 @@ export type DashboardWidgetId =
   | "today-sales"
   | "pending-results"
   | "my-tasks"
-  | "team-messages";
+  | "team-messages"
+  | "expense-pipeline"
+  | "hr-requests";
 
 export interface DashboardWidget {
   id: DashboardWidgetId;
@@ -105,9 +107,18 @@ const ROLE_WIDGETS: Record<string, DashboardWidget[]> = {
     { id: "revenue-trend", span: "wide" }, { id: "payment-mix" },
     { id: "recent-payments" }, { id: "today-sales" }, { id: "my-tasks" },
   ],
+  ACCOUNTANT: [
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
+    { id: "revenue-trend", span: "wide" }, { id: "payment-mix" },
+    { id: "expense-pipeline" }, { id: "recent-payments" }, { id: "my-tasks" },
+  ],
   INVENTORY: [
     { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
     { id: "alerts-low-stock" }, { id: "expiring-stock" }, { id: "my-tasks" },
+  ],
+  HR: [
+    { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" },
+    { id: "hr-requests" }, { id: "my-tasks" },
   ],
   STAFF: [
     { id: "kpi-band" }, { id: "quick-actions" }, { id: "team-messages" }, { id: "my-tasks" },
@@ -116,7 +127,7 @@ const ROLE_WIDGETS: Record<string, DashboardWidget[]> = {
 
 /** Widgets each permission unlocks. A widget renders only when its gate passes. */
 export const WIDGET_PERMISSION: Record<DashboardWidgetId, Permission | null> = {
-  "kpi-band": "patients:read",
+  "kpi-band": null, // role-aware KPI set rendered by the overview (clinical/finance/HR)
   "quick-actions": null,
   "today-appointments": "appointments:read",
   "live-queue": "queue:operate",
@@ -130,6 +141,8 @@ export const WIDGET_PERMISSION: Record<DashboardWidgetId, Permission | null> = {
   "pending-results": "lab:operate",
   "my-tasks": null,
   "team-messages": null,
+  "expense-pipeline": "accounting:read",
+  "hr-requests": "hr:read",
 };
 
 const DEFAULT_ACTIONS: QuickAction[] = [
@@ -144,6 +157,8 @@ const DEFAULT_ACTIONS: QuickAction[] = [
   { id: "qa-reports", label: "Reports", view: "reports", icon: "BarChart3", permission: "reports:read" },
   { id: "qa-ai", label: "Ask AI", view: "ai", icon: "Sparkles", permission: "ai:ask" },
   { id: "qa-staff", label: "Staff", view: "staff", icon: "UserCog", permission: "staff:read" },
+  { id: "qa-accounting", label: "Accounting", view: "accounting", icon: "Landmark", permission: "accounting:read" },
+  { id: "qa-hr", label: "Human Resources", view: "hr", icon: "Contact", permission: "hr:read" },
 ];
 
 /**

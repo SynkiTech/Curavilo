@@ -19,6 +19,8 @@ import { Billing, InvoiceDetail } from "./billing";
 import { POS } from "./pos";
 import { Inventory } from "./inventory";
 import { Reports } from "./reports";
+import { Accounting } from "./accounting";
+import { HR } from "./hr";
 import { AIChat } from "./ai-chat";
 import { Workflows, Audit, FollowUps, Settings } from "./admin";
 import { StaffConsole } from "./staff-console";
@@ -119,6 +121,8 @@ function Screen() {
     case "pos": return <POS />;
     case "inventory": return <Inventory />;
     case "reports": return <Reports />;
+    case "accounting": return <Accounting />;
+    case "hr": return <HR />;
     case "ai": return <AIChat />;
     case "lab": return <Lab />;
     case "wards": return <Wards />;

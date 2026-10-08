@@ -8,7 +8,7 @@ import {
   Boxes, BarChart3, Sparkles, Workflow as WorkflowIcon, ScrollText, UserCog, Settings, Bell,
   Search, LogOut, HeartPulse, ChevronsUpDown, Check, DoorOpen, ArrowLeftRight,
   FlaskConical, BedDouble, Gauge, Shuffle, MessageSquareText, DatabaseBackup, CalendarCheck2,
-  KeyRound, Loader2,
+  KeyRound, Loader2, Landmark, Contact,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,12 +41,14 @@ const NAV: NavItem[] = [
   { view: "wards", label: "Wards & Admissions", icon: BedDouble, group: "Operations" },
   { view: "billing", label: "Billing", icon: ReceiptText, group: "Finance" },
   { view: "pos", label: "POS / Pharmacy", icon: ShoppingCart, group: "Finance" },
+  { view: "accounting", label: "Accounting", icon: Landmark, group: "Finance" },
   { view: "reports", label: "Reports", icon: BarChart3, group: "Finance" },
   { view: "inventory", label: "Inventory", icon: Boxes, group: "Supply" },
   { view: "ai", label: "AI Assistant", icon: Sparkles, group: "Intelligence" },
   { view: "workflows", label: "Workflows", icon: WorkflowIcon, group: "Intelligence" },
   { view: "command", label: "Command Center", icon: Gauge, group: "Intelligence" },
   { view: "simulation", label: "Simulation", icon: Shuffle, group: "Intelligence" },
+  { view: "hr", label: "Human Resources", icon: Contact, group: "People" },
   { view: "comms", label: "Communications", icon: MessageSquareText, group: "Administration" },
   { view: "data", label: "Data & Portals", icon: DatabaseBackup, group: "Administration" },
   { view: "staff", label: "Staff", icon: UserCog, group: "Administration" },

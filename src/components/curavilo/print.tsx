@@ -359,6 +359,7 @@ export function DocumentRenderer({
             padding: `${fmtMm(paddingMm)}mm`,
             fontSize: `${fontSize}px`,
             lineHeight: 1.45,
+            overflowWrap: "anywhere",
           } as React.CSSProperties
         }
       >
@@ -540,13 +541,17 @@ export function PagePrintButton({ label = "Print", className }: { label?: string
     }
     const sheet = resolveSheet({ ...cfg, marginMm: 0, scalePct: 100 });
     const size = sheet.heightMm === null ? `${fmtMm(sheet.widthMm)}mm auto` : `${fmtMm(sheet.widthMm)}mm ${fmtMm(sheet.heightMm)}mm`;
+    // Printable width for page-level reports: paper width minus the @page
+    // margins, so content is laid out to fit the sheet with nothing cut off.
+    const pageMarginMm = 8;
+    const printableWidthMm = Math.max(20, sheet.widthMm - 2 * pageMarginMm);
     let style = document.querySelector<HTMLStyleElement>("style[data-page-print]");
     if (!style) {
       style = document.createElement("style");
       style.setAttribute("data-page-print", "true");
       document.head.appendChild(style);
     }
-    style.textContent = `@media print { @page { size: ${size}; margin: 8mm; } }`;
+    style.textContent = `@media print { :root { --pageprint-width: ${fmtMm(printableWidthMm)}mm; } @page { size: ${size}; margin: ${pageMarginMm}mm; } }`;
     return () => {
       style.textContent = "";
     };

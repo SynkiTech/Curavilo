@@ -10,6 +10,7 @@ import {
   Link2, UserPlus, Users, Clock3, Stethoscope, CheckCircle2, Wallet, CalendarDays,
   BellRing, PackageSearch, Activity, ArrowRight, Settings2, ArrowUp, ArrowDown, Eye, EyeOff,
   CalendarClock, ListTodo, FlaskConical, ShoppingCart, CalendarX2, ReceiptText,
+  TrendingDown, CircleCheck, Landmark, CalendarOff,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -48,6 +49,8 @@ interface DashboardData {
   expiringLots?: { id: string; item: string; batchNo: string; qtyRemaining: number; expiresAt: string | null }[];
   todaySales?: { count: number; grossMinor: number; returnsMinor: number; currency: string };
   pendingResults?: { count: number; orders: { id: string; test: string; status: string; patient: string; orderedAt: string }[] };
+  accountingKpis?: { currency: string; monthExpensesMinor: number; pendingExpenses: number; pendingExpensesMinor: number; outstandingMinor: number; revenueTodayMinor: number };
+  hrKpis?: { headcount: number; activeStaff: number; onLeaveToday: number; pendingLeaves: number; certsExpiring: number; recentHires: { id: string; name: string; designation: string; department: string | null; active: boolean }[] };
 }
 
 const PIE_COLORS = ["#0d9488", "#06b6d4", "#8b5cf6", "#f59e0b", "#f43f5e", "#6366f1"];
@@ -64,6 +67,7 @@ function useToday(): string {
 const QUICK_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   UserPlus, CalendarDays, ListOrdered: Activity, ClipboardPlus: Stethoscope, ReceiptText,
   ShoppingCart, Boxes: PackageSearch, FlaskConical, BarChart3: Activity, Sparkles: BellRing,
+  Landmark: Wallet, Contact: Users,
 };
 
 export function Overview() {
@@ -134,16 +138,31 @@ export function Overview() {
   const hasEncounterTrend = data.trends.encountersByDay.some((d) => d.count > 0);
   const donutData = data.trends.revenueByMethod.filter((d) => d.minor > 0);
 
-  const kpis: { title: string; value: number | string; hint?: string; icon: React.ComponentType<{ className?: string }>; accent?: Accent; tone?: "default" | "warn"; money?: boolean }[] = [
-    { title: "Registered today", value: s.patientsToday, hint: "new patients", icon: UserPlus, accent: "teal" },
-    { title: "Waiting", value: s.waiting, tone: s.waiting > 6 ? "warn" : "default", hint: "in queue now", icon: Clock3, accent: "amber" },
-    { title: "In service", value: s.inService, hint: "with clinician", icon: Stethoscope, accent: "cyan" },
-    { title: "Completed today", value: s.completedToday, hint: "encounters", icon: CheckCircle2, accent: "emerald" },
-    { title: "Revenue today", value: s.revenueTodayMinor, hint: "payments collected", icon: Wallet, accent: "violet", money: true },
-    { title: "Appointments", value: s.appointmentsToday, hint: "scheduled today", icon: CalendarDays, accent: "indigo" },
-    { title: "Overdue follow-ups", value: s.overdueFollowUps, tone: s.overdueFollowUps > 0 ? "warn" : "default", hint: "need attention", icon: BellRing, accent: "rose" },
-    { title: "Low stock items", value: data.lowStock.length, tone: data.lowStock.length > 0 ? "warn" : "default", hint: "at reorder level", icon: PackageSearch, accent: "amber" },
-  ];
+  // Role-aware KPI cards: each department sees the numbers that matter to it.
+  // Clinical/ops KPIs need patients:read; accounting and HR get their own sets.
+  const kpis: { title: string; value: number | string; hint?: string; icon: React.ComponentType<{ className?: string }>; accent?: Accent; tone?: "default" | "warn"; money?: boolean }[] =
+    user.permissions.includes("patients:read") ? [
+      { title: "Registered today", value: s.patientsToday, hint: "new patients", icon: UserPlus, accent: "teal" },
+      { title: "Waiting", value: s.waiting, tone: s.waiting > 6 ? "warn" : "default", hint: "in queue now", icon: Clock3, accent: "amber" },
+      { title: "In service", value: s.inService, hint: "with clinician", icon: Stethoscope, accent: "cyan" },
+      { title: "Completed today", value: s.completedToday, hint: "encounters", icon: CheckCircle2, accent: "emerald" },
+      { title: "Revenue today", value: s.revenueTodayMinor, hint: "payments collected", icon: Wallet, accent: "violet", money: true },
+      { title: "Appointments", value: s.appointmentsToday, hint: "scheduled today", icon: CalendarDays, accent: "indigo" },
+      { title: "Overdue follow-ups", value: s.overdueFollowUps, tone: s.overdueFollowUps > 0 ? "warn" : "default", hint: "need attention", icon: BellRing, accent: "rose" },
+      { title: "Low stock items", value: data.lowStock.length, tone: data.lowStock.length > 0 ? "warn" : "default", hint: "at reorder level", icon: PackageSearch, accent: "amber" },
+    ]
+    : user.permissions.includes("accounting:read") && data.accountingKpis ? [
+      { title: "Revenue today", value: data.accountingKpis.revenueTodayMinor, hint: "payments collected", icon: Wallet, accent: "violet", money: true },
+      { title: "Outstanding", value: data.accountingKpis.outstandingMinor, hint: "receivables", icon: ReceiptText, accent: "amber", money: true, tone: data.accountingKpis.outstandingMinor > 0 ? "warn" : "default" },
+      { title: "Expenses this month", value: data.accountingKpis.monthExpensesMinor, hint: "booked", icon: TrendingDown, accent: "rose", money: true },
+      { title: "Pending approvals", value: data.accountingKpis.pendingExpenses, hint: "expenses to review", icon: CircleCheck, accent: "teal", tone: data.accountingKpis.pendingExpenses > 0 ? "warn" : "default" },
+    ]
+    : user.permissions.includes("hr:read") && data.hrKpis ? [
+      { title: "Headcount", value: data.hrKpis.headcount, hint: `${data.hrKpis.activeStaff} active staff`, icon: Users, accent: "teal" },
+      { title: "On leave today", value: data.hrKpis.onLeaveToday, hint: "approved absence", icon: CalendarX2, accent: "amber", tone: data.hrKpis.onLeaveToday > 0 ? "warn" : "default" },
+      { title: "Pending leave", value: data.hrKpis.pendingLeaves, hint: "awaiting decision", icon: CalendarClock, accent: "violet", tone: data.hrKpis.pendingLeaves > 0 ? "warn" : "default" },
+      { title: "Certs expiring", value: data.hrKpis.certsExpiring, hint: "within 30 days", icon: ListTodo, accent: "rose", tone: data.hrKpis.certsExpiring > 0 ? "warn" : "default" },
+    ] : [];
 
   // Per-widget render registry. Every widget is independently permission-gated
   // server-side too; this map renders only what the configuration allowed.
@@ -513,6 +532,50 @@ export function Overview() {
         )}
       </section>
     ),
+    "expense-pipeline": (
+      <section key="expense-pipeline" aria-label="Expense pipeline" className="curvilo-card curvilo-rise rounded-xl border bg-white p-4" style={{ animationDelay: "560ms" }}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold"><TrendingDown className="h-4 w-4 text-amber-600" aria-hidden /> Expense pipeline</h2>
+          <button className="flex items-center gap-1 text-xs text-teal-700 hover:underline" onClick={() => navigate("accounting")}>
+            <Link2 className="h-3 w-3" /> Accounting
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-lg bg-stone-50 p-3">
+            <p className="text-xl font-bold tabular-nums text-stone-800">{fullMoney(data.accountingKpis?.monthExpensesMinor ?? 0)}</p>
+            <p className="text-[11px] text-muted-foreground">booked this month</p>
+          </div>
+          <div className="rounded-lg bg-amber-50/70 p-3">
+            <p className="text-xl font-bold tabular-nums text-amber-700">{data.accountingKpis?.pendingExpenses ?? 0}</p>
+            <p className="text-[11px] text-muted-foreground">awaiting approval</p>
+          </div>
+        </div>
+      </section>
+    ),
+    "hr-requests": (
+      <section key="hr-requests" aria-label="People and leave" className="curvilo-card curvilo-rise rounded-xl border bg-white p-4" style={{ animationDelay: "560ms" }}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold"><CalendarOff className="h-4 w-4 text-teal-600" aria-hidden /> People &amp; leave</h2>
+          <button className="flex items-center gap-1 text-xs text-teal-700 hover:underline" onClick={() => navigate("hr")}>
+            <Link2 className="h-3 w-3" /> HR
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-2xl font-bold tabular-nums text-stone-800">{data.hrKpis?.headcount ?? 0}</p>
+            <p className="text-[11px] text-muted-foreground">headcount</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold tabular-nums text-amber-600">{data.hrKpis?.pendingLeaves ?? 0}</p>
+            <p className="text-[11px] text-muted-foreground">pending leave</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold tabular-nums text-stone-800">{data.hrKpis?.onLeaveToday ?? 0}</p>
+            <p className="text-[11px] text-muted-foreground">on leave today</p>
+          </div>
+        </div>
+      </section>
+    ),
   };
 
   const heroLabel = s.profile ? s.profile.replace(/_/g, " ").toLowerCase() : "general";
@@ -641,6 +704,8 @@ function WidgetPrefsButton({
     "pending-results": "Pending results",
     "my-tasks": "My tasks",
     "team-messages": "Team messages",
+    "expense-pipeline": "Expense pipeline",
+    "hr-requests": "People & leave",
   };
 
   const orderKey = order.join(",");

@@ -581,6 +581,97 @@ export const AI_TOOLS: ToolDef[] = [
       };
     },
   },
+  {
+    name: "accounting.summary",
+    description:
+      "Accounting summary for THIS facility: expenses booked (total and by category), pending expense approvals, revenue collected and net position for a period. Accepts either explicit from/to dates (YYYY-MM-DD) or a named period. For accountant/finance questions like 'how much did we spend', 'what expenses are pending', 'net position this month'.",
+    permission: "accounting:read",
+    params: z
+      .object({
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        period: z.enum(["TODAY", "THIS_WEEK", "THIS_MONTH", "THIS_YEAR", "ALL_TIME"]).optional(),
+        label: z.string().max(60).optional(),
+      })
+      .strict(),
+    provenanceFields: ["period"],
+    exec: async (ctx, raw) => {
+      const { from, to, label } = resolveRange(raw as Record<string, unknown>);
+      const base = { orgId: ctx.orgId, facilityId: ctx.facilityId };
+      const [expenses, pending, payments] = await Promise.all([
+        db.expense.aggregate({
+          where: { ...base, status: { in: ["APPROVED", "PAID"] }, incurredAt: { gte: from, lte: to } },
+          _sum: { amountMinor: true },
+        }),
+        db.expense.aggregate({ where: { ...base, status: "PENDING" }, _sum: { amountMinor: true }, _count: true }),
+        db.payment.aggregate({ where: { ...base, voidedAt: null, createdAt: { gte: from, lte: to } }, _sum: { amountMinor: true } }),
+      ]);
+      const rows = await db.expense.findMany({
+        where: { ...base, status: { in: ["APPROVED", "PAID"] }, incurredAt: { gte: from, lte: to } },
+        select: { category: true, amountMinor: true },
+      });
+      const byCategory = rows.reduce<Record<string, number>>((acc, e) => {
+        acc[e.category] = (acc[e.category] ?? 0) + e.amountMinor;
+        return acc;
+      }, {});
+      const revenueMinor = payments._sum.amountMinor ?? 0;
+      const expensesMinor = expenses._sum.amountMinor ?? 0;
+      return {
+        data: {
+          revenueMinor, expensesMinor,
+          netMinor: revenueMinor - expensesMinor,
+          pendingExpenses: pending._count ?? 0,
+          pendingExpensesMinor: pending._sum.amountMinor ?? 0,
+          byCategory,
+          currency: ctx.currency,
+        },
+        provenance: { source: "Expense ledger and payment records", period: { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), label }, recordCount: rows.length },
+      };
+    },
+  },
+  {
+    name: "hr.summary",
+    description:
+      "People overview for THIS facility: headcount by department, staff on leave today, pending leave requests, certifications expiring within 30 days and today's attendance. For HR questions like 'who is on leave', 'how many staff', 'which certifications expire soon'.",
+    permission: "hr:read",
+    params: z.object({}).strict(),
+    provenanceFields: [],
+    exec: async (ctx) => {
+      const now = new Date();
+      const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+      const in30 = new Date(now.getTime() + 30 * 86_400_000);
+      const [staff, onLeave, pendingLeave, certs] = await Promise.all([
+        db.staffMember.findMany({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true }, select: { designation: true, department: true } }),
+        db.leaveRequest.findMany({
+          where: { orgId: ctx.orgId, status: "APPROVED", fromAt: { lte: now }, toAt: { gte: dayStart } },
+          include: { staff: { select: { name: true, designation: true } } },
+          take: 10,
+        }),
+        db.leaveRequest.count({ where: { orgId: ctx.orgId, status: "PENDING" } }),
+        db.staffCertification.findMany({
+          where: { orgId: ctx.orgId, expiresAt: { lte: in30, gte: now } },
+          include: { staff: { select: { name: true } } },
+          orderBy: { expiresAt: "asc" },
+          take: 6,
+        }),
+      ]);
+      const byDepartment = staff.reduce<Record<string, number>>((acc, s) => {
+        const d = s.department?.trim() || "Unassigned";
+        acc[d] = (acc[d] ?? 0) + 1;
+        return acc;
+      }, {});
+      return {
+        data: {
+          headcount: staff.length,
+          byDepartment,
+          onLeaveToday: onLeave.map((l) => ({ name: l.staff?.name ?? "Staff", designation: l.staff?.designation ?? null, until: l.toAt.toISOString().slice(0, 10) })),
+          pendingLeaveRequests: pendingLeave,
+          certificationsExpiring: certs.map((c) => ({ staff: c.staff?.name ?? "Staff", name: c.name, expiresAt: c.expiresAt.toISOString().slice(0, 10) })),
+        },
+        provenance: { source: "Personnel, leave and certification records", filters: {}, recordCount: staff.length },
+      };
+    },
+  },
 ];
 
 /** Permission-gated, zod-validated, row-limited execution. Throws AppError on denial. */

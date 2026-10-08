@@ -19,6 +19,10 @@ function daysAgo(n: number, hour = 9): Date {
   return d;
 }
 
+function salePeriodForDays(n: number): string {
+  return daysAgo(n).toISOString().slice(0, 10).replaceAll("-", "");
+}
+
 function todayAt(hour: number, minute = 0): Date {
   const d = new Date();
   d.setUTCHours(hour, minute, 0, 0);
@@ -29,6 +33,9 @@ async function clean() {
   // Child-first deletion keeps FK constraints happy.
   await db.aIMessage.deleteMany();
   await db.aIConversation.deleteMany();
+  await db.performanceReview.deleteMany();
+  await db.attendanceLog.deleteMany();
+  await db.expense.deleteMany();
   await db.workflowRunNode.deleteMany();
   await db.workflowRun.deleteMany();
   await db.workflowDef.deleteMany();
@@ -129,6 +136,8 @@ async function main() {
     { email: "reception@curavilo.demo", first: "Chioma", last: "Eze", role: "RECEPTIONIST", dept: "Front Desk", line: "Front Desk", designation: "Front Desk Officer", code: "EYE-006", status: "ACTIVE", display: "Chioma Eze" },
     { email: "pharmacy@curavilo.demo", first: "Bola", last: "Ahmed", role: "PHARMACY", dept: "Pharmacy", line: "Pharmacy", designation: "BPharm", code: "EYE-007", status: "ACTIVE", display: "Bola Ahmed" },
     { email: "billing@curavilo.demo", first: "Tunde", last: "Adeyemi", role: "BILLING", dept: "Accounts", line: "Finance", designation: "Accounts Officer", code: "EYE-008", status: "ACTIVE", display: "Tunde Adeyemi" },
+    { email: "accountant@curavilo.demo", first: "Ngozi", last: "Ifeanyi", role: "ACCOUNTANT", dept: "Accounts", line: "Finance", designation: "ACA, Accountant", code: "EYE-011", status: "ACTIVE", display: "Ngozi Ifeanyi" },
+    { email: "hr@curavilo.demo", first: "Amara", last: "Okafor", role: "HR", dept: null, line: "People", designation: "HR Manager", code: "EYE-012", status: "ACTIVE", display: "Amara Okafor" },
     { email: "supervisor@curavilo.demo", first: "Funke", last: "Olawale", role: "STAFF", dept: "Front Desk", line: "Front Desk", designation: "Supervisor", code: "EYE-009", status: "ACTIVE", display: "Funke Olawale", custom: "front-desk-supervisor" },
     { email: "intern@curavilo.demo", first: "Emeka", last: "Obi", role: "STAFF", dept: "Optometry", line: "Optometry", designation: "Intern", code: "EYE-010", status: "SUSPENDED", display: "Emeka Obi" },
   ] as const;
@@ -196,6 +205,92 @@ async function main() {
   const nurse = await db.staffMember.create({
     data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, name: "Amina Yusuf", designation: "NURSE", department: "OPHTHALMOLOGY" },
   });
+
+  // HR directory: full personnel records for the HR workspace (designation + department)
+  const hrStaffSeed = [
+    ["Dr. Chidi Bello", "OPHTHALMOLOGIST", "OPHTHALMOLOGY", "ophthalmologist"],
+    ["Chioma Eze", "RECEPTIONIST", "FRONT DESK", "reception"],
+    ["Bola Ahmed", "PHARMACIST", "PHARMACY", "pharmacy"],
+    ["Tunde Adeyemi", "CASHIER", "ACCOUNTS", "billing"],
+    ["Ngozi Ifeanyi", "ACCOUNTANT", "ACCOUNTS", "accountant"],
+    ["Ngozi Balogun", "OPTICIAN", "OPTICS", "optician"],
+  ] as const;
+  const hrStaff: { id: string; name: string }[] = [{ id: optometrist.id, name: optometrist.name }, { id: nurse.id, name: nurse.name }];
+  for (const [name, designation, department, emailKey] of hrStaffSeed) {
+    const u = await db.user.findUnique({ where: { email: `${emailKey}@curavilo.demo` } });
+    const s = await db.staffMember.create({
+      data: { orgId: eyeOrg.id, facilityId: eyeFacility.id, userId: u?.id ?? null, name, designation, department },
+    });
+    hrStaff.push({ id: s.id, name });
+  }
+
+  // HR: certifications (two expiring within 30 days)
+  await db.staffCertification.createMany({
+    data: [
+      { orgId: eyeOrg.id, staffId: optometrist.id, name: "Optometry Council License", expiresAt: new Date(Date.now() + 18 * 86_400_000) },
+      { orgId: eyeOrg.id, staffId: hrStaff[2].id, name: "MDCN License", expiresAt: new Date(Date.now() + 220 * 86_400_000) },
+      { orgId: eyeOrg.id, staffId: nurse.id, name: "Nursing & Midwifery Council License", expiresAt: new Date(Date.now() + 25 * 86_400_000) },
+      { orgId: eyeOrg.id, staffId: hrStaff[6].id, name: "Dispensing Optics Certificate", expiresAt: new Date(Date.now() + 400 * 86_400_000) },
+    ],
+  });
+
+  // HR: attendance for today (most present, one late, one on approved leave)
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const at = (h: number, m: number) => new Date(dayStart.getTime() + (h * 60 + m) * 60_000);
+  await db.attendanceLog.createMany({
+    data: [
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: optometrist.id, date: dayStart, status: "PRESENT", checkInAt: at(7, 55) },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: nurse.id, date: dayStart, status: "PRESENT", checkInAt: at(8, 5) },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[2].id, date: dayStart, status: "LATE", checkInAt: at(9, 40), note: "Traffic" },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[3].id, date: dayStart, status: "PRESENT", checkInAt: at(8, 20) },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[4].id, date: dayStart, status: "PRESENT", checkInAt: at(8, 2) },
+    ],
+  });
+
+  // HR: leave requests (2 pending + 1 approved covering today)
+  await db.leaveRequest.createMany({
+    data: [
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[3].id, fromAt: new Date(Date.now() + 7 * 86_400_000), toAt: new Date(Date.now() + 12 * 86_400_000), reason: "Family event in Enugu", status: "PENDING" },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[5].id, fromAt: new Date(Date.now() + 20 * 86_400_000), toAt: new Date(Date.now() + 27 * 86_400_000), reason: "Annual leave", status: "PENDING" },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[6].id, fromAt: new Date(Date.now() - 1 * 86_400_000), toAt: new Date(Date.now() + 2 * 86_400_000), reason: "Medical checkup", status: "APPROVED", decidedById: owner.id, decidedAt: new Date(Date.now() - 2 * 86_400_000) },
+    ],
+  });
+
+  // HR: performance reviews
+  await db.performanceReview.createMany({
+    data: [
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: optometrist.id, period: "Q3 2026", reviewerName: "Dr. Adaeze Okafor", overallScore: 5, strengths: "Excellent refraction accuracy and patient rapport.", improvements: "Documentation turnaround.", goals: "Lead two community outreach screenings.", status: "FINAL" },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: nurse.id, period: "Q3 2026", reviewerName: "Dr. Adaeze Okafor", overallScore: 4, strengths: "Reliable triage and tonometry.", improvements: "Inventory counts timeliness.", goals: "Complete infection-control refresher.", status: "FINAL" },
+      { orgId: eyeOrg.id, facilityId: eyeFacility.id, staffId: hrStaff[3].id, period: "Q3 2026", reviewerName: "Ngozi Ifeanyi", overallScore: 3, strengths: "Accurate till reconciliation.", improvements: "Invoice queue backlog.", goals: "Zero pending invoices over 7 days.", status: "FINAL" },
+    ],
+  });
+
+  // Accounting: expense ledger across categories, statuses and dates
+  const expenseSeed = [
+    { category: "RENT", description: "Clinic rent - Ikeja premises", vendor: "Awolowo Properties Ltd", amountMinor: 3_500_000, method: "TRANSFER", status: "PAID", days: 32 },
+    { category: "UTILITIES", description: "IKEDC electricity bill", vendor: "Eko Disco", amountMinor: 412_500, method: "TRANSFER", status: "PAID", days: 18 },
+    { category: "SALARIES", description: "Staff salaries - previous month", vendor: null, amountMinor: 12_800_000, method: "TRANSFER", status: "PAID", days: 15 },
+    { category: "SUPPLIES", description: "Printer paper and consumables restock", vendor: "MedSupply Nigeria", amountMinor: 236_000, method: "POS", status: "APPROVED", days: 6 },
+    { category: "EQUIPMENT", description: "Slit lamp bulb replacement", vendor: "OptiTech Systems", amountMinor: 890_000, method: "TRANSFER", status: "APPROVED", days: 4 },
+    { category: "MAINTENANCE", description: "Generator servicing and diesel", vendor: "PowerCare Engineering", amountMinor: 315_000, method: "CASH", status: "PENDING", days: 2 },
+    { category: "MARKETING", description: "Radio awareness campaign - glaucoma week", vendor: "Wazobia FM", amountMinor: 750_000, method: "TRANSFER", status: "PENDING", days: 1 },
+    { category: "TRANSPORT", description: "Courier - lab samples to reference lab", vendor: "GIG Logistics", amountMinor: 48_000, method: "CASH", status: "PENDING", days: 0 },
+    { category: "INSURANCE", description: "Professional indemnity premium", vendor: "AIICO Insurance", amountMinor: 1_200_000, method: "CHEQUE", status: "REJECTED", days: 22 },
+    { category: "OPERATIONS", description: "Cleaning services - monthly", vendor: "Sparkle Facilities", amountMinor: 180_000, method: "CASH", status: "PENDING", days: 3 },
+  ] as const;
+  for (const e of expenseSeed) {
+    await db.expense.create({
+      data: {
+        orgId: eyeOrg.id, facilityId: eyeFacility.id,
+        category: e.category, description: e.description, vendor: e.vendor ?? null,
+        amountMinor: e.amountMinor, currency: "NGN", method: e.method, status: e.status,
+        incurredAt: daysAgo(e.days, 10),
+        paidAt: e.status === "PAID" ? daysAgo(e.days, 14) : null,
+        requestedByName: "Tunde Adeyemi (BILLING)",
+        approvedByName: e.status === "PENDING" ? null : "Ngozi Ifeanyi (ACCOUNTANT)",
+      },
+    });
+  }
 
   // Patients
   const patientSeed = [
@@ -309,11 +404,15 @@ async function main() {
 
   let invoiceSeq = 0, paymentSeq = 0, encounterSeq = 0;
   const todayPeriod = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  // The seeded POS sale happens 3 days ago; its number period must match so the
+  // counter row below starts where the seed left off.
+  const salePeriod = salePeriodForDays(3);
   await db.numberSequence.createMany({
     data: [
       { id: `${eyeOrg.id}:INVOICE:${todayPeriod}`, seq: invoiceSeq },
       { id: `${eyeOrg.id}:PAYMENT:${todayPeriod}`, seq: paymentSeq },
       { id: `${eyeOrg.id}:ENCOUNTER:${todayPeriod}`, seq: encounterSeq },
+      { id: `${eyeOrg.id}:SALE:${salePeriod}`, seq: 1 },
     ],
   });
 
@@ -381,7 +480,7 @@ async function main() {
   const saleSubtotal = 2 * 150000 + 95000;
   const sale = await db.sale.create({
     data: {
-      orgId: eyeOrg.id, facilityId: eyeFacility.id, number: `POS-${todayPeriod}-000001`,
+      orgId: eyeOrg.id, facilityId: eyeFacility.id, number: `POS-${salePeriod}-000001`,
       customerName: "Walk-in customer", status: "COMPLETED",
       subtotalMinor: saleSubtotal, discountMinor: 0, totalMinor: saleSubtotal, amountPaidMinor: saleSubtotal,
       method: "CASH", createdById: pharmacyUser.id, createdAt: daysAgo(3, 13),
@@ -516,7 +615,7 @@ async function main() {
 
   console.log("Seed complete.");
   console.log("  Facility gate (stage 1): eyeclinic@curavilo.demo / gracefield@curavilo.demo");
-  console.log("  Eye Clinic staff (stage 2): ophthalmologist@ optometrist@ optician@ nurse@ reception@ pharmacy@ billing@ supervisor@ intern@ (SUSPENDED) curavilo.demo");
+  console.log("  Eye Clinic staff (stage 2): ophthalmologist@ optometrist@ optician@ nurse@ reception@ pharmacy@ billing@ accountant@ hr@ supervisor@ intern@ (SUSPENDED) curavilo.demo");
   console.log("  GP staff (stage 2): gp-doctor@ gp-nurse@ gp-reception@ gp-billing@curavilo.demo");
   console.log(`  Password for all demo accounts: ${PASSWORD}`);
 }

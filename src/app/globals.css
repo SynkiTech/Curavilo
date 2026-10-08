@@ -139,6 +139,45 @@
     box-shadow: none !important;
     background: white !important;
   }
+  /* Page-level report printing (Reports / Accounting / HR): all print-areas
+     flow in document order instead of stacking, and the page is constrained
+     to the printable width of the paper selected in the print gear so wide
+     dashboards shrink to fit with nothing cut off. */
+  .print-area-parent .print-area {
+    position: static !important;
+    inset: auto !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
+  .print-area-parent {
+    position: static !important;
+    width: var(--pageprint-width, 194mm) !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .print-area-parent table {
+    width: 100%;
+    table-layout: auto;
+  }
+  /* Never clip content: long words wrap, logos shrink, boxes keep together. */
+  .print-area {
+    overflow: visible !important;
+  }
+  .print-area td,
+  .print-area th,
+  .print-area div,
+  .print-area span {
+    overflow-wrap: anywhere;
+  }
+  .print-area img {
+    max-width: 100%;
+    height: auto;
+  }
+  .print-area section,
+  .print-area tr {
+    break-inside: avoid;
+  }
   .no-print,
   [data-radix-popper-content-wrapper],
   [data-slot="sonner-toaster"] {

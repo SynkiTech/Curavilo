@@ -1,0 +1,1148 @@
+     1→// Curavilo - multi-tenant healthcare operating platform
+     2→// Money: ALL amounts are integers in minor units (kobo) + currency code. No floats.
+     3→
+     4→generator client {
+     5→  provider = "prisma-client-js"
+     6→}
+     7→
+     8→datasource db {
+     9→  provider = "sqlite"
+    10→  url      = env("DATABASE_URL")
+    11→}
+    12→
+    13→// ─── Identity & Tenancy ─────────────────────────────────────────────────────
+    14→
+    15→model Organization {
+    16→  id        String   @id @default(cuid())
+    17→  name      String
+    18→  slug      String   @unique
+    19→  currency  String   @default("NGN")
+    20→  timezone  String   @default("Africa/Lagos")
+    21→  createdAt DateTime @default(now())
+    22→  updatedAt DateTime @updatedAt
+    23→
+    24→  facilities        Facility[]
+    25→  memberships       Membership[]
+    26→  sessions          Session[]
+    27→  facilityCredential FacilityCredential?
+    28→  gateSessions      GateSession[]
+    29→  customRoles       CustomRole[]
+    30→  departments       Department[]
+    31→
+    32→  @@index([name])
+    33→}
+    34→
+    35→// Facility access gate credential (ADR 0011). Workspace access only - never an authorization identity.
+    36→model FacilityCredential {
+    37→  id           String   @id @default(cuid())
+    38→  orgId        String   @unique
+    39→  email        String   @unique
+    40→  passwordHash String
+    41→  updatedById  String?
+    42→  createdAt    DateTime @default(now())
+    43→  updatedAt    DateTime @updatedAt
+    44→
+    45→  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+    46→}
+    47→
+    48→// Short-lived, sliding-TTL server context: "this browser passed the facility gate". Zero permissions.
+    49→model GateSession {
+    50→  id        String   @id @default(cuid())
+    51→  orgId     String
+    52→  tokenHash String   @unique
+    53→  expiresAt DateTime
+    54→  createdAt DateTime @default(now())
+    55→
+    56→  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+    57→
+    58→  @@index([expiresAt])
+    59→}
+    60→
+    61→model Facility {
+    62→  id                String  @id @default(cuid())
+    63→  orgId             String
+    64→  name              String
+    65→  type              String  @default("CLINIC")
+    66→  serviceProfileKey String  @default("GENERAL_PRACTICE")
+    67→  address           String?
+    68→  phone             String?
+    69→  email             String?
+    70→  // Branding (logo stored as sanitized raster data URL)
+    71→  logoData       String?
+    72→  brandColor     String?
+    73→  reportFooter   String?
+    74→  receiptFooter  String?
+    75→  authorizedSignatory String?
+    76→  // Per-facility terminology overrides on top of the service profile (JSON object key -> label)
+    77→  termOverrides  String?
+    78→  createdAt      DateTime @default(now())
+    79→  updatedAt      DateTime @updatedAt
+    80→
+    81→  org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+    82→  staff          StaffMember[]
+    83→  users          Session[]            @relation("SessionActiveFacility")
+    84→  memberships    FacilityMembership[]
+    85→
+    86→  @@index([orgId])
+    87→  @@index([orgId, serviceProfileKey])
+    88→}
+    89→
+    90→// Facility-level assignment: a user may only open facilities they are assigned to (ADR 0011).
+    91→model FacilityMembership {
+    92→  id         String   @id @default(cuid())
+    93→  userId     String
+    94→  facilityId String
+    95→  createdAt  DateTime @default(now())
+    96→
+    97→  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    98→  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+    99→
+   100→  @@unique([userId, facilityId])
+   101→  @@index([facilityId])
+   102→}
+   103→
+   104→model User {
+   105→  id              String   @id @default(cuid())
+   106→  email           String   @unique
+   107→  name            String
+   108→  passwordHash    String
+   109→  isPlatformAdmin Boolean  @default(false)
+   110→  // Personnel identity fields (ADR 0011)
+   111→  status            String    @default("ACTIVE") // INVITED ACTIVE INACTIVE SUSPENDED LOCKED TERMINATED
+   112→  firstName         String?
+   113→  lastName          String?
+   114→  phone             String?
+   115→  staffCode         String?   // employee ID, unique per org
+   116→  designation       String?   // professional designation
+   117→  employmentStatus  String?   // FULL_TIME PART_TIME CONTRACT LOCUM
+   118→  serviceLine       String?   // service profile key assignment
+   119→  photoData         String?
+   120→  departmentId      String?
+   121→  mustChangePassword Boolean  @default(false)
+   122→  failedLoginCount  Int       @default(0)
+   123→  lockedUntil       DateTime?
+   124→  lastLoginAt       DateTime?
+   125→  passwordSetAt     DateTime  @default(now())
+   126→  dashboardPrefs    String?   // JSON widget personalization (ADR 0011 §7)
+   127→  createdAt         DateTime  @default(now())
+   128→  updatedAt         DateTime  @updatedAt
+   129→
+   130→  memberships         Membership[]
+   131→  sessions            Session[]
+   132→  department          Department?           @relation(fields: [departmentId], references: [id])
+   133→  overrides           PermissionOverride[]
+   134→  passwordTokens      PasswordToken[]
+   135→  facilityMemberships FacilityMembership[]
+   136→
+   137→  @@index([status])
+   138→  @@index([departmentId])
+   139→}
+   140→
+   141→model Membership {
+   142→  id           String  @id @default(cuid())
+   143→  userId       String
+   144→  orgId        String
+   145→  role         String // built-in role key (see src/lib/rbac.ts)
+   146→  customRoleId String? // custom role assignment (ADR 0011)
+   147→  active       Boolean @default(true)
+   148→  createdAt    DateTime @default(now())
+   149→
+   150→  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+   151→  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+   152→  customRole CustomRole?  @relation(fields: [customRoleId], references: [id])
+   153→
+   154→  @@unique([userId, orgId])
+   155→  @@index([orgId])
+   156→  @@index([customRoleId])
+   157→}
+   158→
+   159→// Owner-defined role with a selected permission set. Protected permissions are stripped on write.
+   160→model CustomRole {
+   161→  id          String   @id @default(cuid())
+   162→  orgId       String
+   163→  name        String
+   164→  key         String
+   165→  permissions String // JSON array of permission keys
+   166→  active      Boolean  @default(true)
+   167→  createdAt   DateTime @default(now())
+   168→  updatedAt   DateTime @updatedAt
+   169→
+   170→  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+   171→  memberships Membership[]
+   172→
+   173→  @@unique([orgId, key])
+   174→}
+   175→
+   176→// Per-user permission deltas: role defaults + GRANT - DENY. Protected permissions are not grantable.
+   177→model PermissionOverride {
+   178→  id         String   @id @default(cuid())
+   179→  orgId      String
+   180→  userId     String
+   181→  permission String
+   182→  effect     String   // GRANT | DENY
+   183→  createdAt  DateTime @default(now())
+   184→
+   185→  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   186→
+   187→  @@unique([userId, permission])
+   188→  @@index([orgId])
+   189→}
+   190→
+   191→// Departments for staff organization (per facility or org-wide).
+   192→model Department {
+   193→  id         String   @id @default(cuid())
+   194→  orgId      String
+   195→  facilityId String?
+   196→  name       String
+   197→  active     Boolean  @default(true)
+   198→  createdAt  DateTime @default(now())
+   199→
+   200→  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+   201→  users  User[]
+   202→
+   203→  @@unique([orgId, name])
+   204→}
+   205→
+   206→// Single-use hashed tokens for staff invitations (INVITE) and password resets (RESET).
+   207→model PasswordToken {
+   208→  id        String    @id @default(cuid())
+   209→  orgId     String
+   210→  userId    String
+   211→  kind      String // INVITE | RESET
+   212→  tokenHash String    @unique
+   213→  expiresAt DateTime
+   214→  usedAt    DateTime?
+   215→  createdAt DateTime  @default(now())
+   216→
+   217→  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   218→
+   219→  @@index([userId])
+   220→  @@index([expiresAt])
+   221→}
+   222→
+   223→model Session {
+   224→  id               String   @id @default(cuid())
+   225→  userId           String
+   226→  orgId            String?
+   227→  activeFacilityId String?
+   228→  tokenHash        String   @unique
+   229→  expiresAt        DateTime
+   230→  createdAt        DateTime @default(now())
+   231→
+   232→  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+   233→  org        Organization? @relation(fields: [orgId], references: [id])
+   234→  activeFacility Facility? @relation("SessionActiveFacility", fields: [activeFacilityId], references: [id])
+   235→
+   236→  @@index([userId])
+   237→  @@index([expiresAt])
+   238→}
+   239→
+   240→// ─── Configuration ──────────────────────────────────────────────────────────
+   241→
+   242→model StaffMember {
+   243→  id            String  @id @default(cuid())
+   244→  orgId         String
+   245→  facilityId    String
+   246→  userId        String?
+   247→  name          String
+   248→  designation   String  @default("DOCTOR") // DOCTOR | NURSE | OPTOMETRIST | RECEPTIONIST | PHARMACIST | LAB_SCIENTIST | CASHIER | ADMIN | OTHER
+   249→  department    String?
+   250→  active        Boolean @default(true)
+   251→
+   252→  facility     Facility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+   253→  appointments Appointment[]
+   254→  encounters   Encounter[]   @relation("EncounterStaff")
+   255→  certifications StaffCertification[]
+   256→  leaveRequests  LeaveRequest[]
+   257→  referralsReceived Referral[] @relation("ReferralStaff")
+   258→
+   259→  @@index([orgId, facilityId])
+   260→  @@index([facilityId, designation])
+   261→}
+   262→
+   263→model ServiceItem {
+   264→  id          String  @id @default(cuid())
+   265→  orgId       String
+   266→  facilityId  String?
+   267→  code        String
+   268→  name        String
+   269→  category    String  @default("CONSULTATION") // CONSULTATION | EXAMINATION | PROCEDURE | LAB | IMAGING | MEDICATION | OTHER
+   270→  priceMinor  Int
+   271→  currency    String  @default("NGN")
+   272→  active      Boolean @default(true)
+   273→
+   274→  @@unique([orgId, code])
+   275→  @@index([orgId, category])
+   276→
+   277→  appointments Appointment[]
+   278→}
+   279→
+   280→// ─── Patient operations ─────────────────────────────────────────────────────
+   281→
+   282→model Patient {
+   283→  id             String   @id @default(cuid())
+   284→  orgId          String
+   285→  facilityId     String
+   286→  mrn            String
+   287→  firstName      String
+   288→  lastName       String
+   289→  phone          String
+   290→  email          String?
+   291→  sex            String   @default("FEMALE") // MALE | FEMALE
+   292→  dateOfBirth    DateTime?
+   293→  address        String?
+   294→  nextOfKinName  String?
+   295→  nextOfKinPhone String?
+   296→  bloodGroup     String?
+   297→  allergies      String?
+   298→  consentNote    String?
+   299→  active         Boolean  @default(true)
+   300→  createdAt      DateTime @default(now())
+   301→  updatedAt      DateTime @updatedAt
+   302→
+   303→  appointments Appointment[]
+   304→  queueEntries QueueEntry[]
+   305→  encounters   Encounter[]
+   306→  invoices     Invoice[]
+   307→  followUps    FollowUp[]
+   308→  sales        Sale[]
+   309→  diagnosticOrders DiagnosticOrder[]
+   310→  admissions   Admission[]
+   311→  referrals    Referral[]
+   312→  portalTokens PortalToken[]
+   313→
+   314→  @@unique([orgId, mrn])
+   315→  @@index([orgId, facilityId])
+   316→  @@index([orgId, phone])
+   317→  @@index([orgId, lastName])
+   318→  @@index([facilityId, createdAt])
+   319→}
+   320→
+   321→model Appointment {
+   322→  id            String   @id @default(cuid())
+   323→  orgId         String
+   324→  facilityId    String
+   325→  patientId     String
+   326→  staffMemberId String?
+   327→  serviceItemId String?
+   328→  scheduledAt   DateTime
+   329→  durationMin   Int      @default(30)
+   330→  status        String   @default("SCHEDULED") // SCHEDULED | CHECKED_IN | COMPLETED | CANCELLED | NO_SHOW
+   331→  notes         String?
+   332→  createdById   String
+   333→  createdAt     DateTime @default(now())
+   334→  updatedAt     DateTime @updatedAt
+   335→
+   336→  patient     Patient       @relation(fields: [patientId], references: [id])
+   337→  staffMember StaffMember?  @relation(fields: [staffMemberId], references: [id])
+   338→  serviceItem ServiceItem?  @relation(fields: [serviceItemId], references: [id])
+   339→
+   340→  @@index([orgId, facilityId, scheduledAt])
+   341→  @@index([orgId, patientId])
+   342→  @@index([orgId, status])
+   343→}
+   344→
+   345→model QueueEntry {
+   346→  id            String   @id @default(cuid())
+   347→  orgId         String
+   348→  facilityId    String
+   349→  patientId     String
+   350→  appointmentId String?
+   351→  department    String   @default("GENERAL")
+   352→  number        Int
+   353→  status        String   @default("WAITING") // WAITING | CALLED | IN_SERVICE | COMPLETED | SKIPPED
+   354→  priority      String   @default("NORMAL")  // NORMAL | URGENT
+   355→  checkedInAt   DateTime @default(now())
+   356→  calledAt      DateTime?
+   357→  completedAt   DateTime?
+   358→
+   359→  patient Patient @relation(fields: [patientId], references: [id])
+   360→  encounters Encounter[]
+   361→
+   362→  @@unique([orgId, facilityId, department, number, checkedInAt]) // number resets daily; uniqueness guarded in module
+   363→  @@index([orgId, facilityId, status])
+   364→  @@index([orgId, patientId])
+   365→}
+   366→
+   367→model Encounter {
+   368→  id            String    @id @default(cuid())
+   369→  orgId         String
+   370→  facilityId    String
+   371→  patientId     String
+   372→  appointmentId String?
+   373→  queueEntryId  String?
+   374→  staffMemberId String?
+   375→  serviceLine   String    @default("GENERAL")
+   376→  formKey       String    @default("GENERAL_CONSULT")
+   377→  status        String    @default("OPEN") // OPEN | COMPLETED
+   378→  formData      String    @default("{}")
+   379→  diagnosis     String?
+   380→  plan          String?
+   381→  chargeItemIds String?   // comma-separated ServiceItem ids chosen at completion
+   382→  startedAt     DateTime  @default(now())
+   383→  completedAt   DateTime?
+   384→
+   385→  patient    Patient      @relation(fields: [patientId], references: [id])
+   386→  staffMember StaffMember? @relation("EncounterStaff", fields: [staffMemberId], references: [id])
+   387→  queueEntry QueueEntry?  @relation(fields: [queueEntryId], references: [id])
+   388→  invoices   Invoice[]
+   389→
+   390→  @@index([orgId, facilityId, startedAt])
+   391→  @@index([orgId, patientId, status])
+   392→}
+   393→
+   394→model FollowUp {
+   395→  id          String   @id @default(cuid())
+   396→  orgId       String
+   397→  facilityId  String
+   398→  patientId   String
+   399→  encounterId String?
+   400→  title       String
+   401→  dueAt       DateTime
+   402→  status      String   @default("PENDING") // PENDING | COMPLETED | CANCELLED
+   403→  createdAt   DateTime @default(now())
+   404→
+   405→  patient Patient @relation(fields: [patientId], references: [id])
+   406→
+   407→  @@index([orgId, status, dueAt])
+   408→  @@index([orgId, patientId])
+   409→}
+   410→
+   411→// ─── Finance ────────────────────────────────────────────────────────────────
+   412→
+   413→model Invoice {
+   414→  id              String    @id @default(cuid())
+   415→  orgId           String
+   416→  facilityId      String
+   417→  patientId       String
+   418→  encounterId     String?
+   419→  number          String
+   420→  status          String    @default("DRAFT") // DRAFT | ISSUED | PARTIALLY_PAID | PAID | VOID
+   421→  subtotalMinor   Int
+   422→  discountMinor   Int       @default(0)
+   423→  totalMinor      Int
+   424→  amountPaidMinor Int       @default(0)
+   425→  currency        String    @default("NGN")
+   426→  note            String?
+   427→  issuedAt        DateTime?
+   428→  voidedAt        DateTime?
+   429→  createdById     String
+   430→  createdAt       DateTime  @default(now())
+   431→  updatedAt       DateTime  @updatedAt
+   432→
+   433→  patient   Patient       @relation(fields: [patientId], references: [id])
+   434→  encounter Encounter?    @relation(fields: [encounterId], references: [id])
+   435→  items     InvoiceItem[]
+   436→  payments  Payment[]
+   437→
+   438→  @@unique([orgId, number])
+   439→  @@index([orgId, facilityId, status])
+   440→  @@index([orgId, patientId])
+   441→  @@index([orgId, createdAt])
+   442→}
+   443→
+   444→model InvoiceItem {
+   445→  id              String @id @default(cuid())
+   446→  invoiceId       String
+   447→  orgId           String
+   448→  serviceItemId   String?
+   449→  name            String
+   450→  quantity        Int    @default(1)
+   451→  unitPriceMinor  Int
+   452→  totalMinor      Int
+   453→
+   454→  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+   455→
+   456→  @@index([invoiceId])
+   457→}
+   458→
+   459→model Payment {
+   460→  id          String    @id @default(cuid())
+   461→  orgId       String
+   462→  facilityId  String
+   463→  invoiceId   String
+   464→  number      String // receipt number RCP-…
+   465→  method      String    @default("CASH") // CASH | TRANSFER | CARD | MOBILE
+   466→  amountMinor Int
+   467→  currency    String    @default("NGN")
+   468→  reference   String?
+   469→  voidedAt    DateTime?
+   470→  voidReason  String?
+   471→  createdById String
+   472→  createdAt   DateTime  @default(now())
+   473→
+   474→  invoice Invoice @relation(fields: [invoiceId], references: [id])
+   475→
+   476→  @@unique([orgId, number])
+   477→  @@index([orgId, invoiceId])
+   478→  @@index([orgId, facilityId, createdAt])
+   479→}
+   480→
+   481→// ─── Supply chain (POS + inventory) ─────────────────────────────────────────
+   482→
+   483→model InventoryItem {
+   484→  id                String  @id @default(cuid())
+   485→  orgId             String
+   486→  facilityId        String
+   487→  category          String  @default("PHARMACEUTICAL") // PHARMACEUTICAL | CONSUMABLE | LAB | EQUIPMENT | OFFICE | OTHER
+   488→  sku               String
+   489→  barcode           String?
+   490→  name              String
+   491→  genericName       String?
+   492→  dosageForm        String?
+   493→  unit              String  @default("unit")
+   494→  purchasePriceMinor Int    @default(0)
+   495→  sellingPriceMinor Int    @default(0)
+   496→  currency          String  @default("NGN")
+   497→  reorderLevel      Int     @default(10)
+   498→  supplierId        String?
+   499→  active            Boolean @default(true)
+   500→  createdAt         DateTime @default(now())
+   501→
+   502→  supplier Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+   503→  lots     StockLot[]
+   504→  poLines  PurchaseOrderItem[]
+   505→
+   506→  @@unique([orgId, sku])
+   507→  @@index([orgId, facilityId, category])
+   508→  @@index([orgId, name])
+   509→  @@index([orgId, barcode])
+   510→}
+   511→
+   512→model StockLot {
+   513→  id           String    @id @default(cuid())
+   514→  orgId        String
+   515→  itemId       String
+   516→  batchNo      String
+   517→  expiresAt    DateTime?
+   518→  qtyReceived  Int
+   519→  qtyRemaining Int
+   520→  createdAt    DateTime  @default(now())
+   521→
+   522→  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+   523→
+   524→  @@index([itemId])
+   525→  @@index([orgId, expiresAt])
+   526→}
+   527→
+   528→model StockMovement {
+   529→  id        String   @id @default(cuid())
+   530→  orgId     String
+   531→  itemId    String
+   532→  lotId     String?
+   533→  type      String // RECEIPT | SALE | DISPENSE | ADJUSTMENT | DAMAGE | TRANSFER | RETURN
+   534→  quantity  Int // signed: +in / -out
+   535→  reason    String?
+   536→  refType   String?
+   537→  refId     String?
+   538→  userId    String
+   539→  createdAt DateTime @default(now())
+   540→
+   541→  @@index([orgId, itemId, createdAt])
+   542→}
+   543→
+   544→model Sale {
+   545→  id              String    @id @default(cuid())
+   546→  orgId           String
+   547→  facilityId      String
+   548→  number          String
+   549→  patientId       String?
+   550→  customerName    String?
+   551→  status          String    @default("COMPLETED") // COMPLETED | VOID
+   552→  subtotalMinor   Int
+   553→  discountMinor   Int       @default(0)
+   554→  totalMinor      Int
+   555→  amountPaidMinor Int
+   556→  method          String    @default("CASH")
+   557→  reference       String?
+   558→  voidedAt        DateTime?
+   559→  createdById     String
+   560→  createdAt       DateTime  @default(now())
+   561→
+   562→  patient Patient?    @relation(fields: [patientId], references: [id])
+   563→  items   SaleItem[]
+   564→  returns SaleReturn[]
+   565→
+   566→  @@unique([orgId, number])
+   567→  @@index([orgId, facilityId, createdAt])
+   568→}
+   569→
+   570→model SaleItem {
+   571→  id             String @id @default(cuid())
+   572→  saleId         String
+   573→  orgId          String
+   574→  itemId         String
+   575→  name           String
+   576→  quantity       Int
+   577→  unitPriceMinor Int
+   578→  totalMinor     Int
+   579→
+   580→  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+   581→
+   582→  @@index([saleId])
+   583→}
+   584→
+   585→model SaleReturn {
+   586→  id          String   @id @default(cuid())
+   587→  orgId       String
+   588→  facilityId  String
+   589→  number      String // RET-… credit note
+   590→  saleId      String
+   591→  saleNumber  String // denormalized for quick display
+   592→  reason      String
+   593→  method      String   @default("CASH") // CASH | TRANSFER | CARD | MOBILE | CREDIT
+   594→  totalMinor  Int
+   595→  restocked   Boolean  @default(true)
+   596→  createdById String
+   597→  createdAt   DateTime @default(now())
+   598→
+   599→  sale  Sale            @relation(fields: [saleId], references: [id])
+   600→  items SaleReturnItem[]
+   601→
+   602→  @@unique([orgId, number])
+   603→  @@index([orgId, facilityId, createdAt])
+   604→  @@index([saleId])
+   605→}
+   606→
+   607→model SaleReturnItem {
+   608→  id            String @id @default(cuid())
+   609→  orgId         String
+   610→  saleReturnId  String
+   611→  saleItemId    String?
+   612→  itemId        String
+   613→  name          String
+   614→  quantity      Int
+   615→  unitPriceMinor Int
+   616→  totalMinor    Int
+   617→
+   618→  saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+   619→
+   620→  @@index([saleReturnId])
+   621→}
+   622→
+   623→model HeldSale {
+   624→  id            String   @id @default(cuid())
+   625→  orgId         String
+   626→  facilityId    String
+   627→  label         String?
+   628→  customerName  String?
+   629→  patientId     String?
+   630→  itemsJson     String // [{itemId,name,sku,quantity,unitPriceMinor}]
+   631→  discountMinor Int      @default(0)
+   632→  totalMinor    Int
+   633→  createdById   String
+   634→  createdAt     DateTime @default(now())
+   635→
+   636→  @@index([orgId, facilityId, createdAt])
+   637→}
+   638→
+   639→model Supplier {
+   640→  id        String   @id @default(cuid())
+   641→  orgId     String
+   642→  name      String
+   643→  phone     String?
+   644→  email     String?
+   645→  address   String?
+   646→  notes     String?
+   647→  active    Boolean  @default(true)
+   648→  createdAt DateTime @default(now())
+   649→
+   650→  items          InventoryItem[]
+   651→  purchaseOrders PurchaseOrder[]
+   652→
+   653→  @@index([orgId, name])
+   654→}
+   655→
+   656→model PurchaseOrder {
+   657→  id          String    @id @default(cuid())
+   658→  orgId       String
+   659→  facilityId  String
+   660→  number      String // PO-…
+   661→  supplierId  String
+   662→  status      String    @default("DRAFT") // DRAFT | SUBMITTED | PARTIAL | RECEIVED | CANCELLED
+   663→  expectedAt  DateTime?
+   664→  notes       String?
+   665→  receivedAt  DateTime?
+   666→  createdById String
+   667→  createdAt   DateTime  @default(now())
+   668→
+   669→  supplier Supplier            @relation(fields: [supplierId], references: [id])
+   670→  items    PurchaseOrderItem[]
+   671→
+   672→  @@unique([orgId, number])
+   673→  @@index([orgId, facilityId, status])
+   674→}
+   675→
+   676→model PurchaseOrderItem {
+   677→  id              String @id @default(cuid())
+   678→  orgId           String
+   679→  purchaseOrderId String
+   680→  itemId          String
+   681→  quantity        Int
+   682→  quantityReceived Int   @default(0)
+   683→  unitCostMinor   Int    @default(0)
+   684→
+   685→  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+   686→  item          InventoryItem @relation(fields: [itemId], references: [id])
+   687→
+   688→  @@index([purchaseOrderId])
+   689→}
+   690→
+   691→// ─── Workflow & automation ──────────────────────────────────────────────────
+   692→
+   693→model WorkflowDef {
+   694→  id          String    @id @default(cuid())
+   695→  orgId       String
+   696→  key         String
+   697→  name        String
+   698→  description String?
+   699→  status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+   700→  version     Int       @default(1)
+   701→  definition  String // JSON: { trigger, nodes: [...], edges: [...], schedule?, slaMinutes? } - declarative, no executable code
+   702→  slaMinutes  Int? // run-level SLA; breach detected by scheduler
+   703→  publishedAt DateTime?
+   704→  createdAt   DateTime  @default(now())
+   705→  updatedAt   DateTime  @updatedAt
+   706→
+   707→  runs WorkflowRun[]
+   708→
+   709→  @@unique([orgId, key])
+   710→  @@index([orgId, status])
+   711→}
+   712→
+   713→model WorkflowRun {
+   714→  id             String    @id @default(cuid())
+   715→  orgId          String
+   716→  workflowDefId  String
+   717→  version        Int
+   718→  triggerType    String // ENCOUNTER_COMPLETED | MANUAL | PAYMENT_RECEIVED | SCHEDULED | CUSTOM_WEBHOOK | …
+   719→  triggerRefId   String?
+   720→  correlationId  String? // idempotent event correlation (def+ref dedupe)
+   721→  status         String    @default("RUNNING") // RUNNING | COMPLETED | FAILED | CANCELLED
+   722→  dryRun         Boolean   @default(false)
+   723→  state          String    @default("{}") // JSON persisted run state
+   724→  lastError      String?
+   725→  slaBreachedAt  DateTime?
+   726→  startedAt      DateTime  @default(now())
+   727→  completedAt    DateTime?
+   728→
+   729→  workflowDef WorkflowDef       @relation(fields: [workflowDefId], references: [id])
+   730→  nodes       WorkflowRunNode[]
+   731→
+   732→  @@index([orgId, status])
+   733→  @@index([orgId, workflowDefId])
+   734→  @@index([orgId, correlationId])
+   735→}
+   736→
+   737→model WorkflowRunNode {
+   738→  id             String    @id @default(cuid())
+   739→  orgId          String
+   740→  runId          String
+   741→  nodeKey        String
+   742→  type           String
+   743→  status         String    @default("PENDING") // PENDING | RUNNING | SLEEPING | WAITING_APPROVAL | COMPLETED | SKIPPED | FAILED
+   744→  attempts       Int       @default(0)
+   745→  idempotencyKey String?
+   746→  output         String? // JSON result of the node execution
+   747→  error          String?
+   748→  wakeAt         DateTime? // DELAY nodes + retry backoff
+   749→  decidedAt      DateTime?
+   750→  createdAt      DateTime  @default(now())
+   751→  updatedAt      DateTime  @updatedAt
+   752→
+   753→  run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+   754→
+   755→  @@unique([runId, nodeKey])
+   756→  @@index([orgId, status, wakeAt])
+   757→}
+   758→
+   759→model OutboxEvent {
+   760→  id              String    @id @default(cuid())
+   761→  orgId           String
+   762→  type            String
+   763→  payload         String
+   764→  dispatchAttempts Int      @default(0)
+   765→  lastError       String?
+   766→  processedAt     DateTime?
+   767→  createdAt       DateTime  @default(now())
+   768→
+   769→  @@index([orgId, processedAt])
+   770→}
+   771→
+   772→model Task {
+   773→  id             String    @id @default(cuid())
+   774→  orgId          String
+   775→  facilityId     String?
+   776→  title          String
+   777→  description    String?
+   778→  assigneeUserId String?
+   779→  role           String?
+   780→  priority       String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+   781→  dueAt          DateTime?
+   782→  status         String    @default("OPEN") // OPEN | COMPLETED | CANCELLED
+   783→  kind           String    @default("GENERAL") // GENERAL | APPROVAL
+   784→  decision       String? // APPROVED | REJECTED (approval tasks)
+   785→  decidedById    String?
+   786→  decidedAt      DateTime?
+   787→  source         String    @default("USER") // USER | WORKFLOW | AI | SYSTEM
+   788→  sourceId       String?
+   789→  slaNotifiedAt  DateTime?
+   790→  completedAt    DateTime?
+   791→  createdAt      DateTime  @default(now())
+   792→
+   793→  @@index([orgId, status])
+   794→  @@index([orgId, assigneeUserId])
+   795→  @@index([orgId, kind, status])
+   796→}
+   797→
+   798→model Notification {
+   799→  id        String    @id @default(cuid())
+   800→  orgId     String
+   801→  userId    String?
+   802→  role      String?
+   803→  type      String    @default("SYSTEM")
+   804→  title     String
+   805→  body      String?
+   806→  link      String?
+   807→  readAt    DateTime?
+   808→  createdAt DateTime  @default(now())
+   809→
+   810→  @@index([orgId, userId, readAt])
+   811→}
+   812→
+   813→// ─── Communications & webhooks (Phase 6) ───────────────────────────────────
+   814→
+   815→model CommunicationMessage {
+   816→  id              String    @id @default(cuid())
+   817→  orgId           String
+   818→  facilityId      String?
+   819→  channel         String // EMAIL | SMS | WHATSAPP | IN_APP
+   820→  type            String    @default("GENERAL") // APPOINTMENT_REMINDER | PAYMENT_CONFIRMATION | …
+   821→  recipient       String? // email address / phone / role target
+   822→  recipientUserId String?
+   823→  subject         String?
+   824→  bodyPreview     String? // truncated, non-sensitive-safe
+   825→  status          String    @default("QUEUED") // QUEUED | SENT | SIMULATED | FAILED
+   826→  provider        String    @default("console")
+   827→  providerRef     String?
+   828→  error           String?
+   829→  source          String    @default("MANUAL") // WORKFLOW | MANUAL | SYSTEM | SCHEDULER
+   830→  sourceId        String?
+   831→  createdAt       DateTime  @default(now())
+   832→
+   833→  @@index([orgId, createdAt])
+   834→  @@index([orgId, channel, status])
+   835→}
+   836→
+   837→model ProviderConfig {
+   838→  id         String   @id @default(cuid())
+   839→  orgId      String
+   840→  channel    String // EMAIL | SMS | WHATSAPP
+   841→  provider   String   @default("console") // console (dev simulation) | provider key
+   842→  configJson String   @default("{}") // provider credentials live in env in production; only non-secret metadata here
+   843→  updatedAt  DateTime @updatedAt
+   844→
+   845→  @@unique([orgId, channel])
+   846→}
+   847→
+   848→model WebhookEndpoint {
+   849→  id         String   @id @default(cuid())
+   850→  orgId      String
+   851→  key        String   @unique
+   852→  url        String
+   853→  secretHash String
+   854→  events     String // CSV of event types this endpoint subscribes to
+   855→  active     Boolean  @default(true)
+   856→  createdAt  DateTime @default(now())
+   857→
+   858→  deliveries WebhookDelivery[]
+   859→
+   860→  @@index([orgId])
+   861→}
+   862→
+   863→model WebhookDelivery {
+   864→  id             String    @id @default(cuid())
+   865→  orgId          String
+   866→  endpointId     String
+   867→  eventType      String
+   868→  payload        String
+   869→  status         String    @default("PENDING") // PENDING | DELIVERED | FAILED | DEAD
+   870→  attempts       Int       @default(0)
+   871→  responseStatus Int?
+   872→  lastError      String?
+   873→  nextAttemptAt  DateTime?
+   874→  deliveredAt    DateTime?
+   875→  createdAt      DateTime  @default(now())
+   876→
+   877→  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+   878→
+   879→  @@index([orgId, status, nextAttemptAt])
+   880→}
+   881→
+   882→// ─── Diagnostics / inpatient / referrals (Phase 9) ─────────────────────────
+   883→
+   884→model DiagnosticOrder {
+   885→  id                   String    @id @default(cuid())
+   886→  orgId                String
+   887→  facilityId           String
+   888→  patientId            String
+   889→  encounterId          String?
+   890→  kind                 String    @default("LAB") // LAB | IMAGING
+   891→  serviceItemId        String?
+   892→  testName             String
+   893→  modality             String? // XRAY | ULTRASOUND | CT | MRI (IMAGING)
+   894→  priority             String    @default("ROUTINE") // ROUTINE | URGENT
+   895→  status               String    @default("ORDERED") // ORDERED | SPECIMEN_COLLECTED | RESULT_ENTERED | VERIFIED | RELEASED | CANCELLED
+   896→  clinicalNotes        String?
+   897→  orderedById          String
+   898→  orderedAt            DateTime  @default(now())
+   899→  specimenSite         String?
+   900→  specimenCollectedById String?
+   901→  specimenCollectedAt  DateTime?
+   902→  resultsJson          String? // [{name, value, unit, refRange, flag}]
+   903→  impression           String?
+   904→  verifiedById         String?
+   905→  verifiedAt           DateTime?
+   906→  releasedById         String?
+   907→  releasedAt           DateTime?
+   908→  turnaroundMin        Int?
+   909→  reportNumber         String?
+   910→  cancelReason         String?
+   911→  createdAt            DateTime  @default(now())
+   912→  updatedAt            DateTime  @updatedAt
+   913→
+   914→  patient Patient @relation(fields: [patientId], references: [id])
+   915→
+   916→  @@index([orgId, facilityId, status])
+   917→  @@index([orgId, patientId])
+   918→  @@index([orgId, kind, status])
+   919→}
+   920→
+   921→model Ward {
+   922→  id           String  @id @default(cuid())
+   923→  orgId        String
+   924→  facilityId   String
+   925→  name         String
+   926→  genderPolicy String  @default("MIXED") // MALE | FEMALE | MIXED
+   927→  active       Boolean @default(true)
+   928→
+   929→  beds       Bed[]
+   930→  admissions Admission[]
+   931→
+   932→  @@index([orgId, facilityId])
+   933→}
+   934→
+   935→model Bed {
+   936→  id        String  @id @default(cuid())
+   937→  orgId     String
+   938→  wardId    String
+   939→  label     String
+   940→  status    String  @default("FREE") // FREE | OCCUPIED | MAINTENANCE
+   941→
+   942→  ward       Ward @relation(fields: [wardId], references: [id], onDelete: Cascade)
+   943→  admissions Admission[]
+   944→
+   945→  @@unique([wardId, label])
+   946→  @@index([orgId, status])
+   947→}
+   948→
+   949→model Admission {
+   950→  id               String    @id @default(cuid())
+   951→  orgId            String
+   952→  facilityId       String
+   953→  patientId        String
+   954→  wardId           String
+   955→  bedId            String
+   956→  encounterId      String?
+   957→  reason           String
+   958→  admittedById     String
+   959→  admittedAt       DateTime  @default(now())
+   960→  status           String    @default("ADMITTED") // ADMITTED | DISCHARGED
+   961→  dischargedAt     DateTime?
+   962→  dischargeSummary String?
+   963→  dischargeById    String?
+   964→
+   965→  patient Patient @relation(fields: [patientId], references: [id])
+   966→  bed     Bed     @relation(fields: [bedId], references: [id])
+   967→  ward    Ward    @relation(fields: [wardId], references: [id])
+   968→
+   969→  @@index([orgId, facilityId, status])
+   970→  @@index([orgId, patientId])
+   971→}
+   972→
+   973→model Referral {
+   974→  id               String    @id @default(cuid())
+   975→  orgId            String
+   976→  facilityId       String
+   977→  patientId        String
+   978→  encounterId      String?
+   979→  direction        String    @default("INTERNAL") // INTERNAL | EXTERNAL
+   980→  toServiceLine    String?
+   981→  toStaffMemberId  String?
+   982→  externalFacility String?
+   983→  notes            String?
+   984→  status           String    @default("PENDING") // PENDING | ACCEPTED | COMPLETED | CANCELLED
+   985→  createdById      String
+   986→  createdAt        DateTime  @default(now())
+   987→  resolvedAt       DateTime?
+   988→
+   989→  patient       Patient      @relation(fields: [patientId], references: [id])
+   990→  toStaffMember StaffMember? @relation("ReferralStaff", fields: [toStaffMemberId], references: [id])
+   991→
+   992→  @@index([orgId, facilityId, status])
+   993→  @@index([orgId, patientId])
+   994→}
+   995→
+   996→// ─── Generated documents, ops alerts, simulation (Phases 10–11) ────────────
+   997→
+   998→model GeneratedDocument {
+   999→  id          String   @id @default(cuid())
+  1000→  orgId       String
+  1001→  facilityId  String
+  1002→  kind        String // REPORT | AI_REPORT | DISCHARGE_SUMMARY | LAB_REPORT | REFERRAL_LETTER | WORKFLOW_DOC
+  1003→  title       String
+  1004→  contentJson String // structured document content (sections/tables) rendered by the document engine
+  1005→  sourceId    String?
+  1006→  createdById String
+  1007→  createdAt   DateTime @default(now())
+  1008→
+  1009→  @@index([orgId, kind, createdAt])
+  1010→}
+  1011→
+  1012→model OpsAlert {
+  1013→  id             String    @id @default(cuid())
+  1014→  orgId          String
+  1015→  facilityId     String?
+  1016→  metric         String
+  1017→  severity       String    @default("WARNING") // INFO | WARNING | CRITICAL
+  1018→  value          String
+  1019→  baseline       String?
+  1020→  message        String
+  1021→  fingerprint    String? // dedupe key per metric+window
+  1022→  acknowledgedAt DateTime?
+  1023→  createdAt      DateTime  @default(now())
+  1024→
+  1025→  @@index([orgId, createdAt])
+  1026→  @@unique([orgId, fingerprint])
+  1027→}
+  1028→
+  1029→model SimulationScenario {
+  1030→  id          String   @id @default(cuid())
+  1031→  orgId       String
+  1032→  facilityId  String
+  1033→  name        String
+  1034→  paramsJson  String
+  1035→  resultJson  String?
+  1036→  seed        Int?
+  1037→  createdById String
+  1038→  createdAt   DateTime @default(now())
+  1039→
+  1040→  @@index([orgId, facilityId, createdAt])
+  1041→}
+  1042→
+  1043→// ─── Portals & staff records (Phase 13) ────────────────────────────────────
+  1044→
+  1045→model StaffCertification {
+  1046→  id        String   @id @default(cuid())
+  1047→  orgId     String
+  1048→  staffId   String
+  1049→  name      String
+  1050→  expiresAt DateTime
+  1051→
+  1052→  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  1053→
+  1054→  @@index([orgId, expiresAt])
+  1055→}
+  1056→
+  1057→model LeaveRequest {
+  1058→  id          String    @id @default(cuid())
+  1059→  orgId       String
+  1060→  facilityId  String
+  1061→  staffId     String
+  1062→  fromAt      DateTime
+  1063→  toAt        DateTime
+  1064→  reason      String
+  1065→  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  1066→  decidedById String?
+  1067→  decidedAt   DateTime?
+  1068→  createdAt   DateTime  @default(now())
+  1069→
+  1070→  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  1071→
+  1072→  @@index([orgId, status])
+  1073→}
+  1074→
+  1075→model PortalToken {
+  1076→  id         String    @id @default(cuid())
+  1077→  orgId      String
+  1078→  facilityId String
+  1079→  patientId  String
+  1080→  tokenHash  String    @unique
+  1081→  label      String?
+  1082→  expiresAt  DateTime
+  1083→  revokedAt  DateTime?
+  1084→  lastUsedAt DateTime?
+  1085→  createdById String
+  1086→  createdAt  DateTime  @default(now())
+  1087→
+  1088→  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  1089→
+  1090→  @@index([orgId, patientId])
+  1091→}
+  1092→
+  1093→// ─── Audit ──────────────────────────────────────────────────────────────────
+  1094→
+  1095→model AuditEvent {
+  1096→  id          String   @id @default(cuid())
+  1097→  orgId       String?
+  1098→  facilityId  String?
+  1099→  actorUserId String?
+  1100→  actorLabel  String?
+  1101→  action      String
+  1102→  entityType  String
+  1103→  entityId    String?
+  1104→  summary     String
+  1105→  metadata    String?
+  1106→  createdAt   DateTime @default(now())
+  1107→
+  1108→  @@index([orgId, createdAt])
+  1109→  @@index([orgId, action])
+  1110→}
+  1111→
+  1112→// ─── AI ─────────────────────────────────────────────────────────────────────
+  1113→
+  1114→model AIConversation {
+  1115→  id         String   @id @default(cuid())
+  1116→  orgId      String
+  1117→  userId     String
+  1118→  facilityId String?
+  1119→  title      String   @default("New conversation")
+  1120→  createdAt  DateTime @default(now())
+  1121→  updatedAt  DateTime @updatedAt
+  1122→
+  1123→  messages AIMessage[]
+  1124→
+  1125→  @@index([orgId, userId, updatedAt])
+  1126→}
+  1127→
+  1128→model AIMessage {
+  1129→  id             String   @id @default(cuid())
+  1130→  conversationId String
+  1131→  role           String // user | assistant
+  1132→  content        String
+  1133→  toolCalls      String?
+  1134→  provenance     String?
+  1135→  createdAt      DateTime @default(now())
+  1136→
+  1137→  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  1138→
+  1139→  @@index([conversationId, createdAt])
+  1140→}
+  1141→
+  1142→// ─── Document numbering ─────────────────────────────────────────────────────
+  1143→
+  1144→model NumberSequence {
+  1145→  id  String @id // "{orgId}:{type}:{period}"
+  1146→  seq Int    @default(0)
+  1147→}
+  1148→

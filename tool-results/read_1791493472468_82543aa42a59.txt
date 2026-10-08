@@ -1,0 +1,896 @@
+     1→"use client";
+     2→
+     3→// Admin views: Workflows (builder), Audit, Settings, Staff, Follow-ups
+     4→import { useEffect, useState } from "react";
+     5→import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+     6→import { Loader2, Play, Plus, CircleCheck, CircleX, Wrench, ThumbsUp, ThumbsDown, Pencil, Power, RotateCcw } from "lucide-react";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Input } from "@/components/ui/input";
+     9→import { Label } from "@/components/ui/label";
+    10→import { Badge } from "@/components/ui/badge";
+    11→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+    12→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+    13→import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+    14→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    15→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+    16→import { apiGet, apiSend, formatMoney, formatDate, formatDateTime, type FollowUp, type StaffMember, type ServiceItem, type SessionInfo } from "./api";
+    17→import { LoadingState, ErrorState, EmptyState, PageHeader, StatusBadge } from "./ui-kit";
+    18→import { WorkflowBuilderDialog, type BuilderInitial, type BuilderNode } from "./workflow-builder";
+    19→
+    20→import { useApp, can, term } from "./store";
+    21→import { toast } from "sonner";
+    22→
+    23→// ─── Workflows ──────────────────────────────────────────────────────────────
+    24→
+    25→interface WorkflowDef { id: string; key: string; name: string; description?: string | null; status: string; version: number; definition: string; slaMinutes?: number | null }
+    26→interface RunNode { nodeKey: string; type: string; status: string; attempts: number; output?: string | null; error?: string | null; wakeAt?: string | null }
+    27→interface WorkflowRun { id: string; status: string; version: number; triggerType: string; startedAt: string; completedAt?: string | null; dryRun: boolean; lastError?: string | null; slaBreachedAt?: string | null; workflowDef: { name: string }; nodes?: RunNode[] }
+    28→interface ApprovalTask { id: string; title: string; description?: string | null; status: string; decision?: string | null; createdAt: string; dueAt?: string | null; source: string }
+    29→
+    30→export function Workflows() {
+    31→  const { session } = useApp();
+    32→  const canManage = session?.user?.permissions.includes("workflows:manage") || session?.user?.permissions.includes("settings:manage");
+    33→  const queryClient = useQueryClient();
+    34→  const [builderOpen, setBuilderOpen] = useState(false);
+    35→  const [editing, setEditing] = useState<WorkflowDef | null>(null);
+    36→
+    37→  const { data, isLoading, isError, error, refetch } = useQuery({
+    38→    queryKey: ["workflows"],
+    39→    queryFn: () => apiGet<{ nodeTypes: string[]; triggers: string[]; workflows: WorkflowDef[]; runs: WorkflowRun[]; approvals: ApprovalTask[] }>("/api/workflows"),
+    40→  });
+    41→
+    42→  const toggle = useMutation({
+    43→    mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "PUBLISH_TOGGLE", workflowId }),
+    44→    onSuccess: () => {
+    45→      toast.success("Workflow state changed.");
+    46→      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    47→    },
+    48→    onError: (e) => toast.error((e as Error).message),
+    49→  });
+    50→
+    51→  const run = useMutation({
+    52→    mutationFn: (workflowId: string) => apiSend("POST", "/api/workflows", { action: "RUN", workflowId, payload: {} }),
+    53→    onSuccess: () => {
+    54→      toast.success("Workflow run completed - check runs below.");
+    55→      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    56→    },
+    57→    onError: (e) => toast.error((e as Error).message),
+    58→  });
+    59→
+    60→  const decide = useMutation({
+    61→    mutationFn: (input: { taskId: string; decision: "APPROVED" | "REJECTED" }) => apiSend("POST", "/api/workflows", { action: "RESOLVE_APPROVAL", ...input }),
+    62→    onSuccess: () => {
+    63→      toast.success("Decision recorded - the workflow resumed.");
+    64→      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    65→    },
+    66→    onError: (e) => toast.error((e as Error).message),
+    67→  });
+    68→
+    69→  return (
+    70→    <div>
+    71→      <PageHeader
+    72→        title="Workflows"
+    73→        subtitle="Durable, declarative automations - timers, conditions, approvals, retries and SLAs. Publish before they trigger on live events."
+    74→        actions={canManage ? (
+    75→          <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
+    76→            <Plus className="mr-1.5 h-4 w-4" /> Build workflow
+    77→          </Button>
+    78→        ) : null}
+    79→      />
+    80→
+    81→      {isLoading ? <LoadingState /> : null}
+    82→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+    83→
+    84→      {data ? (
+    85→        <div className="space-y-6">
+    86→          <section aria-label="Approvals" className="space-y-2">
+    87→            <h2 className="text-sm font-semibold text-stone-600">Pending approvals</h2>
+    88→            {data.approvals.filter((a) => a.status === "OPEN").length === 0 ? (
+    89→              <p className="rounded-lg border bg-white px-4 py-4 text-center text-xs text-muted-foreground">No approvals waiting.</p>
+    90→            ) : (
+    91→              data.approvals.filter((a) => a.status === "OPEN").map((a) => (
+    92→                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+    93→                  <div>
+    94→                    <p className="text-sm font-medium">{a.title}</p>
+    95→                    <p className="text-xs text-muted-foreground">{a.description}{a.dueAt ? ` · SLA due ${formatDateTime(a.dueAt, session?.user?.timezone)}` : ""}</p>
+    96→                  </div>
+    97→                  {canManage ? (
+    98→                    <div className="flex gap-1.5">
+    99→                      <Button size="sm" variant="outline" onClick={() => decide.mutate({ taskId: a.id, decision: "APPROVED" })} disabled={decide.isPending}>
+   100→                        <ThumbsUp className="mr-1 h-3.5 w-3.5" /> Approve
+   101→                      </Button>
+   102→                      <Button size="sm" variant="outline" className="text-red-700" onClick={() => decide.mutate({ taskId: a.id, decision: "REJECTED" })} disabled={decide.isPending}>
+   103→                        <ThumbsDown className="mr-1 h-3.5 w-3.5" /> Reject
+   104→                      </Button>
+   105→                    </div>
+   106→                  ) : null}
+   107→                </div>
+   108→              ))
+   109→            )}
+   110→          </section>
+   111→
+   112→          <section aria-label="Definitions" className="space-y-2">
+   113→            {data.workflows.length === 0 ? (
+   114→              <EmptyState title="No workflows yet" hint="Build one - e.g. an outpatient flow: create task → notify → wait 24h → create follow-up." />
+   115→            ) : (
+   116→              data.workflows.map((wf) => {
+   117→                let nodeCount = 0;
+   118→                try { nodeCount = (JSON.parse(wf.definition) as { nodes?: unknown[] }).nodes?.length ?? 0; } catch { nodeCount = 0; }
+   119→                return (
+   120→                <div key={wf.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white p-4">
+   121→                  <div>
+   122→                    <div className="flex items-center gap-2">
+   123→                      <span className="font-medium">{wf.name}</span>
+   124→                      <StatusBadge status={wf.status} />
+   125→                      <Badge variant="outline" className="text-[10px]">v{wf.version}</Badge>
+   126→                      <Badge variant="outline" className="text-[10px]">{nodeCount} steps</Badge>
+   127→                    </div>
+   128→                    <p className="mt-0.5 text-xs text-muted-foreground">{wf.description ?? wf.key}</p>
+   129→                  </div>
+   130→                  {canManage ? (
+   131→                    <div className="flex gap-1.5">
+   132→                      <Button size="sm" variant="outline" onClick={() => { setEditing(wf); setBuilderOpen(true); }}>
+   133→                        <Wrench className="mr-1 h-3.5 w-3.5" /> Builder
+   134→                      </Button>
+   135→                      <Button size="sm" variant="outline" onClick={() => toggle.mutate(wf.id)} disabled={toggle.isPending}>
+   136→                        {wf.status === "PUBLISHED" ? "Archive" : "Publish"}
+   137→                      </Button>
+   138→                      <Button size="sm" variant="outline" onClick={() => run.mutate(wf.id)} disabled={run.isPending || wf.status !== "PUBLISHED"}>
+   139→                        <Play className="mr-1 h-3.5 w-3.5" /> Test run
+   140→                      </Button>
+   141→                    </div>
+   142→                  ) : null}
+   143→                </div>
+   144→                );
+   145→              })
+   146→            )}
+   147→          </section>
+   148→
+   149→          <section aria-label="Runs">
+   150→            <h2 className="mb-2 text-sm font-semibold text-stone-600">Recent runs</h2>
+   151→            {data.runs.length === 0 ? (
+   152→              <p className="rounded-lg border bg-white px-4 py-6 text-center text-sm text-muted-foreground">No runs yet.</p>
+   153→            ) : (
+   154→              <ul className="divide-y overflow-hidden rounded-lg border bg-white text-sm">
+   155→                {data.runs.map((r) => (
+   156→                  <li key={r.id} className="px-3 py-2.5">
+   157→                    <div className="flex flex-wrap items-center justify-between gap-2">
+   158→                      <span>
+   159→                        <span className="font-medium">{r.workflowDef.name}</span>
+   160→                        <span className="ml-2 text-xs text-muted-foreground">{r.triggerType.replaceAll("_", " ")} · {formatDateTime(r.startedAt, session?.user?.timezone)}</span>
+   161→                        {r.slaBreachedAt ? <Badge variant="outline" className="ml-1.5 border-red-200 bg-red-50 text-[10px] text-red-700">SLA breached</Badge> : null}
+   162→                      </span>
+   163→                      <StatusBadge status={r.status} />
+   164→                    </div>
+   165→                    {r.nodes && r.nodes.length > 0 ? (
+   166→                      <ol className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+   167→                        {r.nodes.map((n, i) => (
+   168→                          <li key={i} className="flex items-center gap-2">
+   169→                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${n.status === "COMPLETED" ? "bg-emerald-500" : n.status === "FAILED" ? "bg-red-500" : n.status === "PENDING" ? "bg-stone-300" : "bg-amber-400"}`} aria-hidden />
+   170→                            <span>{n.nodeKey} · {n.type.replaceAll("_", " ")} · {n.status.toLowerCase()}{n.attempts > 1 ? ` (attempt ${n.attempts})` : ""}</span>
+   171→                            {n.output ? <span className="truncate">- {n.output.slice(0, 70)}</span> : null}
+   172→                            {n.error ? <span className="text-red-600">- {n.error.slice(0, 60)}</span> : null}
+   173→                          </li>
+   174→                        ))}
+   175→                      </ol>
+   176→                    ) : null}
+   177→                    {r.lastError ? <p className="mt-1 text-xs text-red-600">{r.lastError}</p> : null}
+   178→                  </li>
+   179→                ))}
+   180→              </ul>
+   181→            )}
+   182→          </section>
+   183→        </div>
+   184→      ) : null}
+   185→
+   186→      <WorkflowBuilderDialog
+   187→        open={builderOpen}
+   188→        onClose={() => setBuilderOpen(false)}
+   189→        initial={editing ? { workflowId: editing.id, key: editing.key, name: editing.name, definition: safeParse(editing.definition)?.definition, slaMinutes: editing.slaMinutes } : undefined}
+   190→      />
+   191→    </div>
+   192→  );
+   193→}
+   194→
+   195→function safeParse(def: string): BuilderInitial | undefined {
+   196→  try {
+   197→    const parsed = JSON.parse(def) as { trigger?: string; nodes?: Array<{ id: string; type: string; config: Record<string, unknown> }>; schedule?: { everyMinutes?: number; dailyAt?: string } };
+   198→    return {
+   199→      definition: {
+   200→        ...parsed,
+   201→        nodes: parsed.nodes?.map((n) => ({ id: n.id, type: n.type as BuilderNode["type"], config: Object.fromEntries(Object.entries(n.config ?? {}).map(([k, v]) => [k, String(v)])) })),
+   202→      },
+   203→    };
+   204→  } catch {
+   205→    return undefined;
+   206→  }
+   207→}
+   208→
+   209→// ─── Audit ──────────────────────────────────────────────────────────────────
+   210→
+   211→interface AuditEvent { id: string; action: string; entityType: string; entityId?: string | null; summary: string; actorLabel?: string | null; createdAt: string }
+   212→
+   213→export function Audit() {
+   214→  const { session } = useApp();
+   215→  const [actionFilter, setActionFilter] = useState("");
+   216→  const { data, isLoading, isError, error, refetch } = useQuery({
+   217→    queryKey: ["audit", actionFilter],
+   218→    queryFn: () => apiGet<{ events: AuditEvent[] }>(`/api/audit?action=${encodeURIComponent(actionFilter)}&limit=150`),
+   219→  });
+   220→
+   221→  return (
+   222→    <div>
+   223→      <PageHeader title="Audit Log" subtitle="Append-only record of who did what, when, and to which record." />
+   224→      <Input placeholder="Filter by action (e.g. payment, ai, encounter)…" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="mb-4 max-w-sm" aria-label="Filter audit events" />
+   225→      {isLoading ? <LoadingState /> : null}
+   226→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+   227→      {data ? (
+   228→        data.events.length === 0 ? (
+   229→          <EmptyState title="No audit events" hint="Events appear as staff use the system." />
+   230→        ) : (
+   231→          <ul className="overflow-hidden rounded-lg border bg-white divide-y text-sm">
+   232→            {data.events.map((ev) => (
+   233→              <li key={ev.id} className="px-3 py-2.5">
+   234→                <div className="flex flex-wrap items-center justify-between gap-2">
+   235→                  <span>
+   236→                    <Badge variant="outline" className="mr-2 text-[10px]">{ev.action}</Badge>
+   237→                    <span className="text-xs text-muted-foreground">{ev.entityType}</span>
+   238→                  </span>
+   239→                  <span className="text-xs text-muted-foreground">{formatDateTime(ev.createdAt, session?.user?.timezone)}</span>
+   240→                </div>
+   241→                <p className="mt-0.5 text-stone-700">{ev.summary}</p>
+   242→                {ev.actorLabel ? <p className="text-[11px] text-muted-foreground">by {ev.actorLabel}</p> : null}
+   243→              </li>
+   244→            ))}
+   245→          </ul>
+   246→        )
+   247→      ) : null}
+   248→    </div>
+   249→  );
+   250→}
+   251→
+   252→// ─── Staff ──────────────────────────────────────────────────────────────────
+   253→
+   254→export function ClinicalDirectory() {
+   255→  const { session } = useApp();
+   256→  const canManage = session?.user?.permissions.includes("staff:manage");
+   257→  const [open, setOpen] = useState(false);
+   258→  const [form, setForm] = useState({ name: "", designation: "DOCTOR", department: "" });
+   259→  const queryClient = useQueryClient();
+   260→
+   261→  const { data, isLoading, isError, error, refetch } = useQuery({
+   262→    queryKey: ["staff"],
+   263→    queryFn: () => apiGet<{ staff: StaffMember[] }>("/api/staff"),
+   264→  });
+   265→
+   266→  const create = useMutation({
+   267→    mutationFn: () => apiSend("POST", "/api/staff", { name: form.name.trim(), designation: form.designation, department: form.department.trim() || null }),
+   268→    onSuccess: () => {
+   269→      toast.success("Staff member added.");
+   270→      setOpen(false);
+   271→      setForm({ name: "", designation: "DOCTOR", department: "" });
+   272→      queryClient.invalidateQueries({ queryKey: ["staff"] });
+   273→    },
+   274→    onError: (e) => toast.error((e as Error).message),
+   275→  });
+   276→
+   277→  return (
+   278→    <div>
+   279→      <PageHeader
+   280→        title="Staff"
+   281→        subtitle="Facility directory used for assignments and schedules."
+   282→        actions={canManage ? <Button className="bg-teal-700 hover:bg-teal-800" onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" /> Add staff</Button> : null}
+   283→      />
+   284→      {isLoading ? <LoadingState /> : null}
+   285→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+   286→      {data ? (
+   287→        data.staff.length === 0 ? (
+   288→          <EmptyState title="No staff records" hint={canManage ? "Add your first staff member." : undefined} />
+   289→        ) : (
+   290→          <div className="overflow-hidden rounded-lg border bg-white">
+   291→            <Table>
+   292→              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Designation</TableHead><TableHead className="hidden sm:table-cell">Department</TableHead></TableRow></TableHeader>
+   293→              <TableBody>
+   294→                {data.staff.map((s) => (
+   295→                  <TableRow key={s.id}>
+   296→                    <TableCell className="font-medium">{s.name}</TableCell>
+   297→                    <TableCell>{s.designation.replaceAll("_", " ")}</TableCell>
+   298→                    <TableCell className="hidden sm:table-cell">{s.department ?? "-"}</TableCell>
+   299→                  </TableRow>
+   300→                ))}
+   301→              </TableBody>
+   302→            </Table>
+   303→          </div>
+   304→        )
+   305→      ) : null}
+   306→
+   307→      <Dialog open={open} onOpenChange={setOpen}>
+   308→        <DialogContent className="sm:max-w-sm">
+   309→          <DialogHeader><DialogTitle>Add staff member</DialogTitle></DialogHeader>
+   310→          <div className="space-y-3">
+   311→            <div className="space-y-1">
+   312→              <Label htmlFor="st-name">Name *</Label>
+   313→              <Input id="st-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+   314→            </div>
+   315→            <div className="grid grid-cols-2 gap-3">
+   316→              <div className="space-y-1">
+   317→                <Label htmlFor="st-desig">Designation</Label>
+   318→                <select id="st-desig" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+   319→                  {["DOCTOR", "NURSE", "OPTOMETRIST", "RECEPTIONIST", "PHARMACIST", "LAB_SCIENTIST", "CASHIER", "ADMIN", "OTHER"].map((d) => (
+   320→                    <option key={d} value={d}>{d.replaceAll("_", " ")}</option>
+   321→                  ))}
+   322→                </select>
+   323→              </div>
+   324→              <div className="space-y-1">
+   325→                <Label htmlFor="st-dept">Department</Label>
+   326→                <Input id="st-dept" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+   327→              </div>
+   328→            </div>
+   329→          </div>
+   330→          <DialogFooter>
+   331→            <Button className="bg-teal-700 hover:bg-teal-800" disabled={create.isPending || !form.name.trim()} onClick={() => create.mutate()}>
+   332→              {create.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Add
+   333→            </Button>
+   334→          </DialogFooter>
+   335→        </DialogContent>
+   336→      </Dialog>
+   337→    </div>
+   338→  );
+   339→}
+   340→
+   341→// ─── Follow-ups ─────────────────────────────────────────────────────────────
+   342→
+   343→export function FollowUps() {
+   344→  const { session, navigate } = useApp();
+   345→  const followUpLabel = term("followup.plural");
+   346→  const canWrite = session?.user?.permissions.includes("encounters:write");
+   347→  const queryClient = useQueryClient();
+   348→  const { data, isLoading, isError, error, refetch } = useQuery({
+   349→    queryKey: ["followups"],
+   350→    queryFn: () => apiGet<{ followUps: FollowUp[] }>("/api/followups?status=PENDING"),
+   351→  });
+   352→
+   353→  const update = useMutation({
+   354→    mutationFn: ({ followUpId, status }: { followUpId: string; status: string }) => apiSend("PATCH", "/api/followups", { followUpId, status }),
+   355→    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["followups"] }),
+   356→    onError: (e) => toast.error((e as Error).message),
+   357→  });
+   358→
+   359→  const now = new Date();
+   360→
+   361→  return (
+   362→    <div>
+   363→      <PageHeader title={followUpLabel} subtitle="Pending reviews - overdue ones are highlighted." />
+   364→      {isLoading ? <LoadingState /> : null}
+   365→      {isError ? <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} /> : null}
+   366→      {data ? (
+   367→        data.followUps.length === 0 ? (
+   368→          <EmptyState title="No pending follow-ups" hint="Follow-ups are created from completed encounters and workflows." />
+   369→        ) : (
+   370→          <ul className="space-y-2">
+   371→            {data.followUps.map((f) => {
+   372→              const overdue = new Date(f.dueAt) < now;
+   373→              return (
+   374→                <li key={f.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-white p-3 text-sm ${overdue ? "border-amber-300" : ""}`}>
+   375→                  <span>
+   376→                    <button className="font-medium hover:text-teal-700 hover:underline" onClick={() => navigate("patient-detail", { patientId: f.patientId })}>
+   377→                      {f.patient ? `${f.patient.firstName} ${f.patient.lastName}` : "Patient"}
+   378→                    </button>
+   379→                    <span className="ml-2 text-muted-foreground">{f.title} · due {formatDate(f.dueAt, session?.user?.timezone)}</span>
+   380→                    {overdue ? <Badge variant="outline" className="ml-2 border-amber-300 bg-amber-50 text-amber-700">Overdue</Badge> : null}
+   381→                  </span>
+   382→                  {canWrite ? (
+   383→                    <span className="flex gap-1.5">
+   384→                      <Button size="sm" variant="outline" onClick={() => update.mutate({ followUpId: f.id, status: "COMPLETED" })}>
+   385→                        <CircleCheck className="mr-1 h-3.5 w-3.5" /> Done
+   386→                      </Button>
+   387→                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => update.mutate({ followUpId: f.id, status: "CANCELLED" })}>
+   388→                        <CircleX className="mr-1 h-3.5 w-3.5" /> Cancel
+   389→                      </Button>
+   390→                    </span>
+   391→                  ) : null}
+   392→                </li>
+   393→              );
+   394→            })}
+   395→          </ul>
+   396→        )
+   397→      ) : null}
+   398→    </div>
+   399→  );
+   400→}
+   401→
+   402→// ─── Settings ───────────────────────────────────────────────────────────────
+   403→
+   404→interface FacilitySettings {
+   405→  id: string; name: string; address?: string | null; phone?: string | null; email?: string | null;
+   406→  logoData?: string | null; reportFooter?: string | null; receiptFooter?: string | null; serviceProfileKey: string;
+   407→}
+   408→interface ProfileInfo { name: string; description: string; terminology: Record<string, string> }
+   409→interface ProfileOption { key: string; name: string; description: string }
+   410→
+   411→const SERVICE_CATEGORIES = ["CONSULTATION", "EXAMINATION", "PROCEDURE", "LAB", "IMAGING", "MEDICATION", "OTHER"] as const;
+   412→
+   413→export function Settings() {
+   414→  const { session, setSession } = useApp();
+   415→  const [form, setForm] = useState<Partial<FacilitySettings>>({});
+   416→  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+   417→  const [busy, setBusy] = useState(false);
+   418→  const fileRef = useState<HTMLInputElement | null>(null);
+   419→  const [termsForm, setTermsForm] = useState<Record<string, string>>({});
+   420→  const [pendingProfile, setPendingProfile] = useState<string | null>(null);
+   421→  const [serviceDialog, setServiceDialog] = useState<{ mode: "add" } | { mode: "edit"; service: ServiceItem } | null>(null);
+   422→
+   423→  const { data, isLoading, isError, error, refetch } = useQuery({
+   424→    queryKey: ["settings"],
+   425→    queryFn: () => apiGet<{ facility: FacilitySettings; profile: ProfileInfo; terminology: Record<string, string>; profiles: ProfileOption[] }>("/api/settings"),
+   426→  });
+   427→
+   428→  const services = useQuery({
+   429→    queryKey: ["services", "admin"],
+   430→    queryFn: () => apiGet<{ services: ServiceItem[] }>("/api/services?includeInactive=1"),
+   431→  });
+   432→
+   433→  useEffect(() => {
+   434→    if (data?.terminology) setTermsForm(data.terminology);
+   435→  }, [data?.terminology]);
+   436→
+   437→  if (isLoading) return <LoadingState />;
+   438→  if (isError) return <ErrorState message={(error as Error)?.message} onRetry={() => void refetch()} />;
+   439→  if (!data) return null;
+   440→
+   441→  const f = { ...data.facility, ...form };
+   442→  const currentLogo = logoPreview ?? f.logoData ?? null;
+   443→  const currency = session?.user?.currency ?? "NGN";
+   444→  const terminologyKeys = Object.keys(data.terminology ?? {});
+   445→  const termsDirty = terminologyKeys.some((k) => (termsForm[k] ?? "") !== (data.terminology?.[k] ?? ""));
+   446→
+   447→  const pickLogo = (file: File | undefined) => {
+   448→    if (!file) return;
+   449→    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { toast.error("Logo must be PNG, JPEG or WebP."); return; }
+   450→    if (file.size > 280_000) { toast.error("Logo must be smaller than 280 KB."); return; }
+   451→    const reader = new FileReader();
+   452→    reader.onload = () => setLogoPreview(String(reader.result));
+   453→    reader.readAsDataURL(file);
+   454→  };
+   455→
+   456→  /** Refresh the session so facility-wide terminology/branding applies everywhere immediately. */
+   457→  const refreshSession = async () => {
+   458→    try {
+   459→      const fresh = await apiGet<SessionInfo>("/api/auth");
+   460→      setSession(fresh ?? { authenticated: false });
+   461→    } catch {
+   462→      // session refresh is best-effort
+   463→    }
+   464→  };
+   465→
+   466→  const save = async () => {
+   467→    setBusy(true);
+   468→    try {
+   469→      await apiSend("PATCH", "/api/settings", {
+   470→        name: f.name,
+   471→        address: f.address ?? null,
+   472→        phone: f.phone ?? null,
+   473→        email: f.email ?? "",
+   474→        logoData: currentLogo ?? "",
+   475→        reportFooter: f.reportFooter ?? null,
+   476→        receiptFooter: f.receiptFooter ?? null,
+   477→      });
+   478→      toast.success("Settings saved.");
+   479→      setLogoPreview(null);
+   480→      await refreshSession();
+   481→      refetch();
+   482→    } catch (e) {
+   483→      toast.error((e as Error).message);
+   484→    } finally {
+   485→      setBusy(false);
+   486→    }
+   487→  };
+   488→
+   489→  const saveTerminology = async () => {
+   490→    setBusy(true);
+   491→    try {
+   492→      // Only keys that differ from the profile defaults become overrides; matching values clear overrides.
+   493→      const overrides: Record<string, string> = {};
+   494→      for (const k of terminologyKeys) {
+   495→        const v = (termsForm[k] ?? "").trim().slice(0, 60);
+   496→        overrides[k] = v === (data.profile.terminology[k] ?? "").trim() ? "" : v;
+   497→      }
+   498→      await apiSend("PATCH", "/api/settings", { termOverrides: overrides });
+   499→      toast.success("Terminology updated - labels now apply facility-wide.");
+   500→      await refreshSession();
+   501→      refetch();
+   502→    } catch (e) {
+   503→      toast.error((e as Error).message);
+   504→    } finally {
+   505→      setBusy(false);
+   506→    }
+   507→  };
+   508→
+   509→  const resetTerminology = () => setTermsForm({ ...data.profile.terminology });
+   510→
+   511→  const confirmProfileSwitch = async () => {
+   512→    if (!pendingProfile) return;
+   513→    setBusy(true);
+   514→    try {
+   515→      await apiSend("PATCH", "/api/settings", { serviceProfileKey: pendingProfile });
+   516→      toast.success(`Service profile switched to ${data.profiles.find((p) => p.key === pendingProfile)?.name ?? pendingProfile}.`);
+   517→      setPendingProfile(null);
+   518→      await refreshSession();
+   519→      refetch();
+   520→      void services.refetch();
+   521→    } catch (e) {
+   522→      toast.error((e as Error).message);
+   523→    } finally {
+   524→      setBusy(false);
+   525→    }
+   526→  };
+   527→
+   528→  const toggleService = async (s: ServiceItem) => {
+   529→    try {
+   530→      await apiSend("PATCH", "/api/services", { id: s.id, active: !s.active });
+   531→      toast.success(`"${s.name}" ${s.active ? "deactivated" : "reactivated"}.`);
+   532→      void services.refetch();
+   533→    } catch (e) {
+   534→      toast.error((e as Error).message);
+   535→    }
+   536→  };
+   537→
+   538→  return (
+   539→    <div>
+   540→      <PageHeader title="Settings" subtitle="Facility profile, branding, terminology and service catalogue." />
+   541→      <div className="grid gap-4 lg:grid-cols-2">
+   542→        <Card>
+   543→          <CardHeader><CardTitle className="text-sm">Facility profile & branding</CardTitle></CardHeader>
+   544→          <CardContent className="space-y-3">
+   545→            <div className="flex items-center gap-4">
+   546→              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-dashed bg-stone-50">
+   547→                {currentLogo ? (
+   548→                   
+   549→                  <img src={currentLogo} alt="Facility logo" className="h-full w-full object-contain" />
+   550→                ) : (
+   551→                  <span className="text-xs text-stone-400">No logo</span>
+   552→                )}
+   553→              </div>
+   554→              <div>
+   555→                <input
+   556→                  type="file"
+   557→                  accept="image/png,image/jpeg,image/webp"
+   558→                  className="hidden"
+   559→                  ref={(el) => { fileRef[0] = el; }}
+   560→                  onChange={(e) => pickLogo(e.target.files?.[0])}
+   561→                />
+   562→                <Button variant="outline" size="sm" onClick={() => fileRef[0]?.click()}>Upload logo</Button>
+   563→                <p className="mt-1 text-[11px] text-muted-foreground">PNG/JPEG/WebP, max 280 KB. SVG rejected for safety.</p>
+   564→              </div>
+   565→            </div>
+   566→            <div className="space-y-1">
+   567→              <Label htmlFor="set-name">Facility name</Label>
+   568→              <Input id="set-name" value={f.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+   569→            </div>
+   570→            <div className="space-y-1">
+   571→              <Label htmlFor="set-address">Address</Label>
+   572→              <Input id="set-address" value={f.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+   573→            </div>
+   574→            <div className="grid grid-cols-2 gap-3">
+   575→              <div className="space-y-1">
+   576→                <Label htmlFor="set-phone">Phone</Label>
+   577→                <Input id="set-phone" value={f.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+   578→              </div>
+   579→              <div className="space-y-1">
+   580→                <Label htmlFor="set-email">Email</Label>
+   581→                <Input id="set-email" value={f.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+   582→              </div>
+   583→            </div>
+   584→            <div className="space-y-1">
+   585→              <Label htmlFor="set-rf">Report footer</Label>
+   586→              <Input id="set-rf" value={f.reportFooter ?? ""} onChange={(e) => setForm({ ...form, reportFooter: e.target.value })} />
+   587→            </div>
+   588→            <div className="space-y-1">
+   589→              <Label htmlFor="set-rf2">Receipt footer</Label>
+   590→              <Input id="set-rf2" value={f.receiptFooter ?? ""} onChange={(e) => setForm({ ...form, receiptFooter: e.target.value })} />
+   591→            </div>
+   592→            <Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={busy} onClick={() => void save()}>
+   593→              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save settings
+   594→            </Button>
+   595→          </CardContent>
+   596→        </Card>
+   597→
+   598→        <div className="space-y-4">
+   599→          <Card>
+   600→            <CardHeader>
+   601→              <CardTitle className="text-sm">Service profile & terminology</CardTitle>
+   602→              <p className="text-[11px] text-muted-foreground">Editable labels - changes apply across the whole facility.</p>
+   603→            </CardHeader>
+   604→            <CardContent className="space-y-3">
+   605→              <div className="space-y-1">
+   606→                <Label htmlFor="set-profile" className="text-xs">Service profile</Label>
+   607→                <Select value={data.facility.serviceProfileKey} onValueChange={(v) => { if (v !== data.facility.serviceProfileKey) setPendingProfile(v); }}>
+   608→                  <SelectTrigger id="set-profile" aria-label="Service profile"><SelectValue /></SelectTrigger>
+   609→                  <SelectContent>
+   610→                    {data.profiles.map((p) => (
+   611→                      <SelectItem key={p.key} value={p.key}>{p.name}</SelectItem>
+   612→                    ))}
+   613→                  </SelectContent>
+   614→                </Select>
+   615→                <p className="text-[11px] text-muted-foreground">{data.profile.description}</p>
+   616→              </div>
+   617→              <div className="space-y-1.5">
+   618→                <Label className="text-xs">Terminology</Label>
+   619→                <div className="grid gap-1.5 sm:grid-cols-2">
+   620→                  {terminologyKeys.map((k) => (
+   621→                    <div key={k} className="space-y-0.5">
+   622→                      <Label htmlFor={`term-${k}`} className="font-mono text-[10px] text-muted-foreground">{k}</Label>
+   623→                      <Input
+   624→                        id={`term-${k}`}
+   625→                        value={termsForm[k] ?? ""}
+   626→                        maxLength={60}
+   627→                        onChange={(e) => setTermsForm({ ...termsForm, [k]: e.target.value })}
+   628→                        className="h-8 text-sm"
+   629→                      />
+   630→                    </div>
+   631→                  ))}
+   632→                </div>
+   633→                <div className="flex items-center gap-2 pt-1">
+   634→                  <Button size="sm" className="bg-teal-700 hover:bg-teal-800" disabled={busy || !termsDirty} onClick={() => void saveTerminology()}>
+   635→                    {busy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null} Save terminology
+   636→                  </Button>
+   637→                  <Button size="sm" variant="outline" disabled={!termsDirty || busy} onClick={resetTerminology}>
+   638→                    <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset to profile
+   639→                  </Button>
+   640→                </div>
+   641→              </div>
+   642→            </CardContent>
+   643→          </Card>
+   644→
+   645→          <Card>
+   646→            <CardHeader className="flex-row items-center justify-between space-y-0">
+   647→              <div>
+   648→                <CardTitle className="text-sm">Service catalogue</CardTitle>
+   649→                <p className="mt-0.5 text-[11px] text-muted-foreground">Prices and services apply facility-wide, everywhere they are billed or booked.</p>
+   650→              </div>
+   651→              <Button size="sm" className="bg-teal-700 hover:bg-teal-800" onClick={() => setServiceDialog({ mode: "add" })}>
+   652→                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add service
+   653→              </Button>
+   654→            </CardHeader>
+   655→            <CardContent>
+   656→              {(services.data?.services ?? []).length === 0 ? (
+   657→                <p className="py-4 text-center text-xs text-muted-foreground">No services in the catalogue yet.</p>
+   658→              ) : (
+   659→                <div className="max-h-72 overflow-y-auto rounded-md border">
+   660→                  <Table>
+   661→                    <TableHeader>
+   662→                      <TableRow>
+   663→                        <TableHead>Service</TableHead>
+   664→                        <TableHead>Category</TableHead>
+   665→                        <TableHead className="text-right">Price</TableHead>
+   666→                        <TableHead className="w-24 text-right">Actions</TableHead>
+   667→                      </TableRow>
+   668→                    </TableHeader>
+   669→                    <TableBody>
+   670→                      {(services.data?.services ?? []).map((s) => (
+   671→                        <TableRow key={s.id} className={s.active === false ? "opacity-50" : ""}>
+   672→                          <TableCell>
+   673→                            <div className="flex items-center gap-1.5">
+   674→                              <span className={s.active === false ? "line-through" : ""}>{s.name}</span>
+   675→                              <span className="font-mono text-[10px] text-muted-foreground">{s.code}</span>
+   676→                            </div>
+   677→                          </TableCell>
+   678→                          <TableCell className="text-xs text-muted-foreground">{s.category}</TableCell>
+   679→                          <TableCell className="text-right tabular-nums">{formatMoney(s.priceMinor, s.currency)}</TableCell>
+   680→                          <TableCell className="text-right">
+   681→                            <div className="flex justify-end gap-1">
+   682→                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`Edit ${s.name}`} onClick={() => setServiceDialog({ mode: "edit", service: s })}>
+   683→                                <Pencil className="h-3.5 w-3.5" />
+   684→                              </Button>
+   685→                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={s.active === false ? `Reactivate ${s.name}` : `Deactivate ${s.name}`} onClick={() => void toggleService(s)}>
+   686→                                <Power className={`h-3.5 w-3.5 ${s.active === false ? "text-teal-700" : "text-stone-400"}`} />
+   687→                              </Button>
+   688→                            </div>
+   689→                          </TableCell>
+   690→                        </TableRow>
+   691→                      ))}
+   692→                    </TableBody>
+   693→                  </Table>
+   694→                </div>
+   695→              )}
+   696→            </CardContent>
+   697→          </Card>
+   698→          {can("org:manage") ? <FacilityCredentialCard /> : null}
+   699→        </div>
+   700→      </div>
+   701→
+   702→      {/* Profile switch confirmation */}
+   703→      <AlertDialog open={!!pendingProfile} onOpenChange={(open) => !open && setPendingProfile(null)}>
+   704→        <AlertDialogContent>
+   705→          <AlertDialogHeader>
+   706→            <AlertDialogTitle>Switch service profile?</AlertDialogTitle>
+   707→            <AlertDialogDescription>
+   708→              {pendingProfile ? data.profiles.find((p) => p.key === pendingProfile)?.name : ""} changes the default terminology and the encounter form template for this facility. Existing records keep their data, and the service catalogue is not modified. You can customise terminology afterwards.
+   709→            </AlertDialogDescription>
+   710→          </AlertDialogHeader>
+   711→          <AlertDialogFooter>
+   712→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   713→            <AlertDialogAction className="bg-teal-700 hover:bg-teal-800" onClick={() => void confirmProfileSwitch()}>Switch profile</AlertDialogAction>
+   714→          </AlertDialogFooter>
+   715→        </AlertDialogContent>
+   716→      </AlertDialog>
+   717→
+   718→      {/* Add / edit service dialog */}
+   719→      {serviceDialog ? (
+   720→        <ServiceDialog
+   721→          mode={serviceDialog.mode}
+   722→          service={serviceDialog.mode === "edit" ? serviceDialog.service : null}
+   723→          currency={currency}
+   724→          onClose={() => setServiceDialog(null)}
+   725→          onSaved={async () => {
+   726→            setServiceDialog(null);
+   727→            void services.refetch();
+   728→          }}
+   729→        />
+   730→      ) : null}
+   731→    </div>
+   732→  );
+   733→}
+   734→
+   735→// ─── Service catalogue add/edit dialog ──────────────────────────────────────
+   736→
+   737→function ServiceDialog({ mode, service, currency, onClose, onSaved }: {
+   738→  mode: "add" | "edit";
+   739→  service: ServiceItem | null;
+   740→  currency: string;
+   741→  onClose: () => void;
+   742→  onSaved: () => void | Promise<void>;
+   743→}) {
+   744→  const [code, setCode] = useState(service?.code ?? "");
+   745→  const [name, setName] = useState(service?.name ?? "");
+   746→  const [category, setCategory] = useState<string>(service?.category ?? "CONSULTATION");
+   747→  const [price, setPrice] = useState(service ? (service.priceMinor / 100).toFixed(2) : "");
+   748→  const [busy, setBusy] = useState(false);
+   749→  const [err, setErr] = useState<string | null>(null);
+   750→
+   751→  const submit = async () => {
+   752→    setErr(null);
+   753→    const priceMinor = Math.round(parseFloat(price) * 100);
+   754→    if (!code.trim() || code.trim().length < 2) { setErr("Code is required (min 2 characters)."); return; }
+   755→    if (!name.trim() || name.trim().length < 2) { setErr("Name is required (min 2 characters)."); return; }
+   756→    if (!Number.isFinite(priceMinor) || priceMinor < 0) { setErr("Enter a valid price (0 or more)."); return; }
+   757→    setBusy(true);
+   758→    try {
+   759→      if (mode === "add") {
+   760→        await apiSend("POST", "/api/services", { code: code.trim(), name: name.trim(), category, priceMinor });
+   761→        toast.success(`Service "${name.trim()}" added to the catalogue.`);
+   762→      } else if (service) {
+   763→        await apiSend("PATCH", "/api/services", { id: service.id, code: code.trim(), name: name.trim(), category, priceMinor });
+   764→        toast.success(`Service "${name.trim()}" updated - the new price applies facility-wide.`);
+   765→      }
+   766→      await onSaved();
+   767→      onClose();
+   768→    } catch (e) {
+   769→      setErr((e as Error).message);
+   770→    } finally {
+   771→      setBusy(false);
+   772→    }
+   773→  };
+   774→
+   775→  return (
+   776→    <Dialog open onOpenChange={(open) => !open && onClose()}>
+   777→      <DialogContent className="sm:max-w-md">
+   778→        <DialogHeader>
+   779→          <DialogTitle>{mode === "add" ? "Add service" : "Edit service"}</DialogTitle>
+   780→          <DialogDescription>
+   781→            {mode === "add" ? "New services become available for booking, encounters, billing and the POS." : "Price and detail changes apply across the whole facility immediately."}
+   782→          </DialogDescription>
+   783→        </DialogHeader>
+   784→        <div className="space-y-3">
+   785→          {err ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{err}</p> : null}
+   786→          <div className="grid grid-cols-2 gap-3">
+   787→            <div className="space-y-1">
+   788→              <Label htmlFor="svc-code">Code</Label>
+   789→              <Input id="svc-code" value={code} maxLength={40} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. CONS-EYE" />
+   790→            </div>
+   791→            <div className="space-y-1">
+   792→              <Label htmlFor="svc-cat">Category</Label>
+   793→              <Select value={category} onValueChange={setCategory}>
+   794→                <SelectTrigger id="svc-cat" aria-label="Category"><SelectValue /></SelectTrigger>
+   795→                <SelectContent>
+   796→                  {SERVICE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+   797→                </SelectContent>
+   798→              </Select>
+   799→            </div>
+   800→          </div>
+   801→          <div className="space-y-1">
+   802→            <Label htmlFor="svc-name">Service name</Label>
+   803→            <Input id="svc-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eye Consultation" />
+   804→          </div>
+   805→          <div className="space-y-1">
+   806→            <Label htmlFor="svc-price">Price ({currency})</Label>
+   807→            <Input id="svc-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
+   808→            {mode === "edit" && service ? (
+   809→              <p className="text-[11px] text-muted-foreground">Current: {formatMoney(service.priceMinor, service.currency)}</p>
+   810→            ) : null}
+   811→          </div>
+   812→        </div>
+   813→        <DialogFooter>
+   814→          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+   815→          <Button className="bg-teal-700 hover:bg-teal-800" onClick={() => void submit()} disabled={busy}>
+   816→            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+   817→            {mode === "add" ? "Add service" : "Save changes"}
+   818→          </Button>
+   819→        </DialogFooter>
+   820→      </DialogContent>
+   821→    </Dialog>
+   822→  );
+   823→}
+   824→
+   825→// ─── Facility access credential (owner-only, ADR 0011) ─────────────────────
+   826→
+   827→function FacilityCredentialCard() {
+   828→  const [email, setEmail] = useState("");
+   829→  const [password, setPassword] = useState("");
+   830→  const [confirm, setConfirm] = useState("");
+   831→  const [busy, setBusy] = useState(false);
+   832→  const [loading, setLoading] = useState(true);
+   833→
+   834→  useEffect(() => {
+   835→    let active = true;
+   836→    apiGet<{ credentialEmail: string | null }>("/api/facility-credential")
+   837→      .then((r) => { if (active) { setEmail(r.credentialEmail ?? ""); setLoading(false); } })
+   838→      .catch(() => active && setLoading(false));
+   839→    return () => { active = false; };
+   840→  }, []);
+   841→
+   842→  const save = async () => {
+   843→    if (password && password !== confirm) {
+   844→      toast.error("New passwords do not match.");
+   845→      return;
+   846→    }
+   847→    setBusy(true);
+   848→    try {
+   849→      await apiSend("PATCH", "/api/facility-credential", {
+   850→        ...(email ? { email } : {}),
+   851→        ...(password ? { password } : {}),
+   852→      });
+   853→      toast.success("Facility access credential updated.");
+   854→      setPassword("");
+   855→      setConfirm("");
+   856→    } catch (e) {
+   857→      toast.error((e as Error).message);
+   858→    } finally {
+   859→      setBusy(false);
+   860→    }
+   861→  };
+   862→
+   863→  return (
+   864→    <Card>
+   865→      <CardHeader><CardTitle className="text-sm">Facility access credential</CardTitle></CardHeader>
+   866→      <CardContent className="space-y-3">
+   867→        <p className="text-xs text-muted-foreground">
+   868→          This is the workspace credential used at the facility access gate (step 1 of sign-in). It opens
+   869→          the facility only - it never grants staff permissions. Owner-only, changeable at any time.
+   870→        </p>
+   871→        {loading ? <LoadingState /> : (
+   872→          <>
+   873→            <div className="space-y-1">
+   874→              <Label htmlFor="cred-email">Facility gate email</Label>
+   875→              <Input id="cred-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+   876→            </div>
+   877→            <div className="grid grid-cols-2 gap-3">
+   878→              <div className="space-y-1">
+   879→                <Label htmlFor="cred-pass">New gate password</Label>
+   880→                <Input id="cred-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep" />
+   881→              </div>
+   882→              <div className="space-y-1">
+   883→                <Label htmlFor="cred-confirm">Confirm password</Label>
+   884→                <Input id="cred-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+   885→              </div>
+   886→            </div>
+   887→            <Button className="w-full bg-teal-700 hover:bg-teal-800" disabled={busy || (!password && !email)} onClick={() => void save()}>
+   888→              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Update facility credential
+   889→            </Button>
+   890→          </>
+   891→        )}
+   892→      </CardContent>
+   893→    </Card>
+   894→  );
+   895→}
+   896→

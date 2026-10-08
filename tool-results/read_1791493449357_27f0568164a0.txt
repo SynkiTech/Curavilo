@@ -1,0 +1,635 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→// Central print engine (ADR 0004): document data + facility branding + print profile
+     4→     4→// → renderer → browser print. Reprint keeps the original transaction.
+     5→     5→//
+     6→     6→// Versatile paper model: named presets (A3…A6, Letter, Legal, Tabloid, Executive,
+     7→     7→// thermal 58/80/112 mm) plus a fully custom sheet (width x height in mm or inch),
+     8→     8→// portrait/landscape, margin control and text scale. Settings persist locally so
+     9→     9→// the same choice is reused across receipts, invoices and POS sales.
+    10→    10→
+    11→    11→import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+    12→    12→import { Printer, RotateCcw, Settings2 } from "lucide-react";
+    13→    13→import { Button } from "@/components/ui/button";
+    14→    14→import { Input } from "@/components/ui/input";
+    15→    15→import { Label } from "@/components/ui/label";
+    16→    16→import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+    17→    17→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    18→    18→
+    19→    19→export type PrintProfileKey =
+    20→    20→  | "A3" | "A4_STANDARD" | "A5_STANDARD" | "A6"
+    21→    21→  | "LETTER_STANDARD" | "LEGAL" | "TABLOID" | "EXECUTIVE"
+    22→    22→  | "THERMAL_58MM" | "THERMAL_80MM" | "THERMAL_112MM"
+    23→    23→  | "CUSTOM";
+    24→    24→
+    25→    25→export interface PrintProfile {
+    26→    26→  key: PrintProfileKey;
+    27→    27→  label: string;
+    28→    28→  widthMm: number;
+    29→    29→  heightMm: number | null; // null = continuous feed (thermal), height auto
+    30→    30→  mono: boolean;
+    31→    31→}
+    32→    32→
+    33→    33→export const PRINT_PROFILES: Record<Exclude<PrintProfileKey, "CUSTOM">, PrintProfile> = {
+    34→    34→  A3: { key: "A3", label: "A3 (297 x 420 mm)", widthMm: 297, heightMm: 420, mono: false },
+    35→    35→  A4_STANDARD: { key: "A4_STANDARD", label: "A4 (210 x 297 mm)", widthMm: 210, heightMm: 297, mono: false },
+    36→    36→  A5_STANDARD: { key: "A5_STANDARD", label: "A5 (148 x 210 mm)", widthMm: 148, heightMm: 210, mono: false },
+    37→    37→  A6: { key: "A6", label: "A6 (105 x 148 mm)", widthMm: 105, heightMm: 148, mono: false },
+    38→    38→  LETTER_STANDARD: { key: "LETTER_STANDARD", label: "Letter (8.5 x 11 in)", widthMm: 215.9, heightMm: 279.4, mono: false },
+    39→    39→  LEGAL: { key: "LEGAL", label: "Legal (8.5 x 14 in)", widthMm: 215.9, heightMm: 355.6, mono: false },
+    40→    40→  TABLOID: { key: "TABLOID", label: "Tabloid (11 x 17 in)", widthMm: 279.4, heightMm: 431.8, mono: false },
+    41→    41→  EXECUTIVE: { key: "EXECUTIVE", label: "Executive (7.25 x 10.5 in)", widthMm: 184.15, heightMm: 266.7, mono: false },
+    42→    42→  THERMAL_58MM: { key: "THERMAL_58MM", label: "Thermal 58 mm (roll)", widthMm: 58, heightMm: null, mono: true },
+    43→    43→  THERMAL_80MM: { key: "THERMAL_80MM", label: "Thermal 80 mm (roll)", widthMm: 80, heightMm: null, mono: true },
+    44→    44→  THERMAL_112MM: { key: "THERMAL_112MM", label: "Thermal 112 mm (roll)", widthMm: 112, heightMm: null, mono: true },
+    45→    45→};
+    46→    46→
+    47→    47→export interface Branding {
+    48→    48→  orgName: string;
+    49→    49→  facilityName: string;
+    50→    50→  address?: string | null;
+    51→    51→  phone?: string | null;
+    52→    52→  email?: string | null;
+    53→    53→  logoData?: string | null;
+    54→    54→  reportFooter?: string | null;
+    55→    55→  receiptFooter?: string | null;
+    56→    56→  timezone: string;
+    57→    57→  currency: string;
+    58→    58→}
+    59→    59→
+    60→    60→export interface DocLine {
+    61→    61→  name: string;
+    62→    62→  quantity: number;
+    63→    63→  unitPriceMinor: number;
+    64→    64→  totalMinor: number;
+    65→    65→}
+    66→    66→
+    67→    67→export interface ReceiptDocData {
+    68→    68→  kind: "RECEIPT" | "SALE_RECEIPT" | "INVOICE" | "CREDIT_NOTE";
+    69→    69→  number: string;
+    70→    70→  issuedTo: string;
+    71→    71→  dateTime: string;
+    72→    72→  cashier: string;
+    73→    73→  lines: DocLine[];
+    74→    74→  subtotalMinor: number;
+    75→    75→  discountMinor: number;
+    76→    76→  totalMinor: number;
+    77→    77→  amountPaidMinor?: number;
+    78→    78→  method?: string;
+    79→    79→  reference?: string | null;
+    80→    80→  reprint?: boolean;
+    81→    81→  status?: string;
+    82→    82→}
+    83→    83→
+    84→    84→type Orientation = "portrait" | "landscape";
+    85→    85→type Unit = "mm" | "in";
+    86→    86→
+    87→    87→interface PrintSettings {
+    88→    88→  profileKey: PrintProfileKey;
+    89→    89→  orientation: Orientation;
+    90→    90→  customWidthMm: number;
+    91→    91→  customHeightMm: number;
+    92→    92→  customUnit: Unit;
+    93→    93→  marginMm: number;
+    94→    94→  scalePct: number; // 80..140
+    95→    95→}
+    96→    96→
+    97→    97→const DEFAULTS: PrintSettings = {
+    98→    98→  profileKey: "THERMAL_80MM",
+    99→    99→  orientation: "portrait",
+   100→   100→  customWidthMm: 210,
+   101→   101→  customHeightMm: 297,
+   102→   102→  customUnit: "mm",
+   103→   103→  marginMm: 6,
+   104→   104→  scalePct: 100,
+   105→   105→};
+   106→   106→
+   107→   107→const MARGIN_PRESETS: { label: string; mm: number }[] = [
+   108→   108→  { label: "No margin (0 mm)", mm: 0 },
+   109→   109→  { label: "Narrow (6 mm)", mm: 6 },
+   110→   110→  { label: "Normal (12 mm)", mm: 12 },
+   111→   111→  { label: "Wide (20 mm)", mm: 20 },
+   112→   112→];
+   113→   113→
+   114→   114→const STORAGE_KEY = "curavilo.print.settings.v2";
+   115→   115→const MM_PER_IN = 25.4;
+   116→   116→const PX_PER_MM = 96 / 25.4;
+   117→   117→
+   118→   118→function loadSettings(): PrintSettings {
+   119→   119→  try {
+   120→   120→    const raw = window.localStorage.getItem(STORAGE_KEY);
+   121→   121→    if (!raw) return DEFAULTS;
+   122→   122→    const parsed = JSON.parse(raw) as Partial<PrintSettings>;
+   123→   123→    return { ...DEFAULTS, ...parsed };
+   124→   124→  } catch {
+   125→   125→    return DEFAULTS;
+   126→   126→  }
+   127→   127→}
+   128→   128→
+   129→   129→const isThermal = (key: PrintProfileKey) => key === "THERMAL_58MM" || key === "THERMAL_80MM" || key === "THERMAL_112MM";
+   130→   130→
+   131→   131→/** Resolve the effective sheet geometry from settings. */
+   132→   132→function resolveSheet(s: PrintSettings): { widthMm: number; heightMm: number | null; mono: boolean } {
+   133→   133→  if (s.profileKey === "CUSTOM") {
+   134→   134→    const w = s.customUnit === "in" ? s.customWidthMm * MM_PER_IN : s.customWidthMm;
+   135→   135→    const h = s.customUnit === "in" ? s.customHeightMm * MM_PER_IN : s.customHeightMm;
+   136→   136→    const [ew, eh] = s.orientation === "landscape" ? [Math.max(w, h), Math.min(w, h)] : [w, h];
+   137→   137→    return { widthMm: ew, heightMm: eh, mono: false };
+   138→   138→  }
+   139→   139→  const p = PRINT_PROFILES[s.profileKey as Exclude<PrintProfileKey, "CUSTOM">];
+   140→   140→  if (p.heightMm === null) return { widthMm: p.widthMm, heightMm: null, mono: p.mono };
+   141→   141→  const [ew, eh] = s.orientation === "landscape" ? [p.heightMm, p.widthMm] : [p.widthMm, p.heightMm];
+   142→   142→  return { widthMm: ew, heightMm: eh, mono: p.mono };
+   143→   143→}
+   144→   144→
+   145→   145→const fmtMm = (mm: number) => (Math.round(mm * 10) / 10).toString();
+   146→   146→
+   147→   147→export function DocumentRenderer({
+   148→   148→  branding,
+   149→   149→  data,
+   150→   150→  defaultProfile = "THERMAL_80MM",
+   151→   151→  onPrinted,
+   152→   152→}: {
+   153→   153→  branding: Branding;
+   154→   154→  data: ReceiptDocData;
+   155→   155→  defaultProfile?: PrintProfileKey;
+   156→   156→  onPrinted?: () => void;
+   157→   157→}) {
+   158→   158→  const [settings, setSettings] = useState<PrintSettings>(() => {
+   159→   159→    if (typeof window === "undefined") return { ...DEFAULTS, profileKey: defaultProfile };
+   160→   160→    const saved = loadSettings();
+   161→   161→    return saved.profileKey ? saved : { ...saved, profileKey: defaultProfile };
+   162→   162→  });
+   163→   163→  const printedRef = useRef(false);
+   164→   164→
+   165→   165→  useEffect(() => {
+   166→   166→    try {
+   167→   167→      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+   168→   168→    } catch {
+   169→   169→      // storage unavailable (private mode): settings stay in memory
+   170→   170→    }
+   171→   171→  }, [settings]);
+   172→   172→
+   173→   173→  const sheet = useMemo(() => resolveSheet(settings), [settings]);
+   174→   174→  const thermal = sheet.heightMm === null;
+   175→   175→  const paddingMm = thermal ? Math.min(settings.marginMm, 4) : settings.marginMm;
+   176→   176→  const fontSize = (sheet.mono ? 10 : 12) * (settings.scalePct / 100);
+   177→   177→
+   178→   178→  const update = (patch: Partial<PrintSettings>) => setSettings((prev) => ({ ...prev, ...patch }));
+   179→   179→
+   180→   180→  // Inject @page rule for the effective sheet while mounted
+   181→   181→  useEffect(() => {
+   182→   182→    const size = sheet.heightMm === null ? `${fmtMm(sheet.widthMm)}mm auto` : `${fmtMm(sheet.widthMm)}mm ${fmtMm(sheet.heightMm)}mm`;
+   183→   183→    const style = document.createElement("style");
+   184→   184→    style.setAttribute("data-print-profile", "true");
+   185→   185→    style.textContent = `@media print { @page { size: ${size}; margin: 0; } }`;
+   186→   186→    document.head.appendChild(style);
+   187→   187→    return () => {
+   188→   188→      style.remove();
+   189→   189→    };
+   190→   190→  }, [sheet]);
+   191→   191→
+   192→   192→  const doPrint = () => {
+   193→   193→    printedRef.current = true;
+   194→   194→    const originalTitle = document.title;
+   195→   195→    document.title = `${data.number} - ${branding.facilityName}`;
+   196→   196→    const restore = () => {
+   197→   197→      document.title = originalTitle;
+   198→   198→      window.removeEventListener("afterprint", restore);
+   199→   199→    };
+   200→   200→    window.addEventListener("afterprint", restore);
+   201→   201→    window.print();
+   202→   202→    onPrinted?.();
+   203→   203→    // Safety restore in case afterprint does not fire (some browsers + previews)
+   204→   204→    window.setTimeout(() => {
+   205→   205→      if (document.title !== originalTitle) restore();
+   206→   206→    }, 4000);
+   207→   207→  };
+   208→   208→
+   209→   209→  return (
+   210→   210→    <div className="space-y-3">
+   211→   211→      {/* Controls + preview (never printed) */}
+   212→   212→      <div className="no-print grid gap-3 sm:grid-cols-[1fr_auto]">
+   213→   213→        <div className="space-y-2.5 rounded-xl border bg-stone-50/70 p-3">
+   214→   214→          <div className="flex flex-wrap items-end gap-2">
+   215→   215→            <div className="space-y-1">
+   216→   216→              <Label className="text-[11px] text-muted-foreground">Paper size</Label>
+   217→   217→              <Select
+   218→   218→                value={settings.profileKey}
+   219→   219→                onValueChange={(v) => {
+   220→   220→                  const key = v as PrintProfileKey;
+   221→   221→                  update({ profileKey: key, orientation: isThermal(key) ? "portrait" : settings.orientation });
+   222→   222→                }}
+   223→   223→              >
+   224→   224→                <SelectTrigger className="w-[190px]" aria-label="Paper size">
+   225→   225→                  <SelectValue />
+   226→   226→                </SelectTrigger>
+   227→   227→                <SelectContent>
+   228→   228→                  {Object.values(PRINT_PROFILES).map((p) => (
+   229→   229→                    <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+   230→   230→                  ))}
+   231→   231→                  <SelectItem value="CUSTOM">Custom size…</SelectItem>
+   232→   232→                </SelectContent>
+   233→   233→              </Select>
+   234→   234→            </div>
+   235→   235→
+   236→   236→            {settings.profileKey === "CUSTOM" ? (
+   237→   237→              <>
+   238→   238→                <div className="space-y-1">
+   239→   239→                  <Label htmlFor="pp-w" className="text-[11px] text-muted-foreground">Width</Label>
+   240→   240→                  <Input
+   241→   241→                    id="pp-w"
+   242→   242→                    type="number"
+   243→   243→                    min={10}
+   244→   244→                    max={2000}
+   245→   245→                    step={settings.customUnit === "mm" ? 1 : 0.05}
+   246→   246→                    value={settings.customUnit === "mm" ? settings.customWidthMm : Math.round((settings.customWidthMm / MM_PER_IN) * 100) / 100}
+   247→   247→                    onChange={(e) => update({ customWidthMm: Math.max(10, Number(e.target.value) || 0) * (settings.customUnit === "in" ? MM_PER_IN : 1) })}
+   248→   248→                    className="h-9 w-24"
+   249→   249→                  />
+   250→   250→                </div>
+   251→   251→                <div className="space-y-1">
+   252→   252→                  <Label htmlFor="pp-h" className="text-[11px] text-muted-foreground">Height</Label>
+   253→   253→                  <Input
+   254→   254→                    id="pp-h"
+   255→   255→                    type="number"
+   256→   256→                    min={10}
+   257→   257→                    max={2000}
+   258→   258→                    step={settings.customUnit === "mm" ? 1 : 0.05}
+   259→   259→                    value={settings.customUnit === "mm" ? settings.customHeightMm : Math.round((settings.customHeightMm / MM_PER_IN) * 100) / 100}
+   260→   260→                    onChange={(e) => update({ customHeightMm: Math.max(10, Number(e.target.value) || 0) * (settings.customUnit === "in" ? MM_PER_IN : 1) })}
+   261→   261→                    className="h-9 w-24"
+   262→   262→                  />
+   263→   263→                </div>
+   264→   264→                <div className="space-y-1">
+   265→   265→                  <Label className="text-[11px] text-muted-foreground">Unit</Label>
+   266→   266→                  <Select value={settings.customUnit} onValueChange={(v) => update({ customUnit: v as Unit })}>
+   267→   267→                    <SelectTrigger className="w-[74px]" aria-label="Unit"><SelectValue /></SelectTrigger>
+   268→   268→                    <SelectContent>
+   269→   269→                      <SelectItem value="mm">mm</SelectItem>
+   270→   270→                      <SelectItem value="in">inch</SelectItem>
+   271→   271→                    </SelectContent>
+   272→   272→                  </Select>
+   273→   273→                </div>
+   274→   274→              </>
+   275→   275→            ) : null}
+   276→   276→
+   277→   277→            {!thermal ? (
+   278→   278→              <div className="space-y-1">
+   279→   279→                <Label className="text-[11px] text-muted-foreground">Orientation</Label>
+   280→   280→                <div className="flex h-9 overflow-hidden rounded-md border">
+   281→   281→                  {(["portrait", "landscape"] as Orientation[]).map((o) => (
+   282→   282→                    <button
+   283→   283→                      key={o}
+   284→   284→                      type="button"
+   285→   285→                      onClick={() => update({ orientation: o })}
+   286→   286→                      className={`px-3 text-xs transition ${settings.orientation === o ? "bg-teal-600 font-medium text-white" : "bg-white text-stone-500 hover:bg-teal-50"}`}
+   287→   287→                    >
+   288→   288→                      {o === "portrait" ? "Portrait" : "Landscape"}
+   289→   289→                    </button>
+   290→   290→                  ))}
+   291→   291→                </div>
+   292→   292→              </div>
+   293→   293→            ) : null}
+   294→   294→          </div>
+   295→   295→
+   296→   296→          <div className="flex flex-wrap items-end gap-2">
+   297→   297→            <div className="space-y-1">
+   298→   298→              <Label className="text-[11px] text-muted-foreground">Margin</Label>
+   299→   299→              <Select value={String(settings.marginMm)} onValueChange={(v) => update({ marginMm: Number(v) })}>
+   300→   300→                <SelectTrigger className="w-[150px]" aria-label="Margin"><SelectValue /></SelectTrigger>
+   301→   301→                <SelectContent>
+   302→   302→                  {MARGIN_PRESETS.map((m) => (
+   303→   303→                    <SelectItem key={m.mm} value={String(m.mm)}>{m.label}</SelectItem>
+   304→   304→                  ))}
+   305→   305→                </SelectContent>
+   306→   306→              </Select>
+   307→   307→            </div>
+   308→   308→            <div className="min-w-[170px] flex-1 space-y-1">
+   309→   309→              <Label htmlFor="pp-scale" className="text-[11px] text-muted-foreground">Text scale: {settings.scalePct}%</Label>
+   310→   310→              <input
+   311→   311→                id="pp-scale"
+   312→   312→                type="range"
+   313→   313→                min={80}
+   314→   314→                max={140}
+   315→   315→                step={5}
+   316→   316→                value={settings.scalePct}
+   317→   317→                onChange={(e) => update({ scalePct: Number(e.target.value) })}
+   318→   318→                className="h-9 w-full accent-teal-600"
+   319→   319→                aria-label="Text scale"
+   320→   320→              />
+   321→   321→            </div>
+   322→   322→            <Button variant="ghost" size="sm" onClick={() => setSettings({ ...DEFAULTS, profileKey: defaultProfile })} title="Reset print settings">
+   323→   323→              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset
+   324→   324→            </Button>
+   325→   325→            <Button onClick={doPrint} size="sm" className="ml-auto">
+   326→   326→              <Printer className="mr-2 h-4 w-4" /> Print / Save PDF
+   327→   327→            </Button>
+   328→   328→          </div>
+   329→   329→
+   330→   330→          <p className="text-[11px] text-muted-foreground">
+   331→   331→            Sheet: {fmtMm(sheet.widthMm)} x {sheet.heightMm === null ? "auto" : fmtMm(sheet.heightMm)} mm · margin {fmtMm(paddingMm)} mm · your choice is remembered for next time.
+   332→   332→            In the browser dialog, pick the same paper size and set margins to None for a 1:1 fit.
+   333→   333→          </p>
+   334→   334→        </div>
+   335→   335→
+   336→   336→        {/* Live preview */}
+   337→   337→        <div className="hidden flex-col items-center rounded-xl border bg-stone-100/70 p-3 sm:flex" aria-hidden>
+   338→   338→          <span className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-400">Preview</span>
+   339→   339→          <PaperPreview sheet={sheet} paddingMm={paddingMm} fontSize={fontSize}>
+   340→   340→            <DocBody branding={branding} data={data} mono={sheet.mono} />
+   341→   341→          </PaperPreview>
+   342→   342→        </div>
+   343→   343→      </div>
+   344→   344→
+   345→   345→      {data.reprint ? (
+   346→   346→        <div className="no-print">
+   347→   347→          <span className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">REPRINT</span>
+   348→   348→        </div>
+   349→   349→      ) : null}
+   350→   350→
+   351→   351→      {/* Actual printable document */}
+   352→   352→      <div
+   353→   353→        className={`print-area mx-auto bg-white text-stone-900 shadow-sm ${sheet.mono ? "font-mono" : "font-sans"}`}
+   354→   354→        style={
+   355→   355→          {
+   356→   356→            "--pp-width": `${fmtMm(sheet.widthMm)}mm`,
+   357→   357→            width: `${fmtMm(sheet.widthMm)}mm`,
+   358→   358→            maxWidth: "100%",
+   359→   359→            padding: `${fmtMm(paddingMm)}mm`,
+   360→   360→            fontSize: `${fontSize}px`,
+   361→   361→            lineHeight: 1.45,
+   362→   362→          } as React.CSSProperties
+   363→   363→        }
+   364→   364→      >
+   365→   365→        <DocBody branding={branding} data={data} mono={sheet.mono} />
+   366→   366→      </div>
+   367→   367→    </div>
+   368→   368→  );
+   369→   369→}
+   370→   370→
+   371→   371→/** Scaled paper mock: true aspect ratio, live doc render inside. */
+   372→   372→function PaperPreview({
+   373→   373→  sheet,
+   374→   374→  paddingMm,
+   375→   375→  fontSize,
+   376→   376→  children,
+   377→   377→}: {
+   378→   378→  sheet: { widthMm: number; heightMm: number | null };
+   379→   379→  paddingMm: number;
+   380→   380→  fontSize: number;
+   381→   381→  children: ReactNode;
+   382→   382→}) {
+   383→   383→  const PREVIEW_W = 172; // px
+   384→   384→  const ratio = sheet.heightMm === null ? 1.5 : Math.min(1.9, sheet.heightMm / sheet.widthMm);
+   385→   385→  const zoom = PREVIEW_W / (sheet.widthMm * PX_PER_MM); // doc laid out at true mm size, zoomed to fit
+   386→   386→  return (
+   387→   387→    <div
+   388→   388→      className="relative overflow-hidden rounded-md border border-stone-300 bg-white shadow-sm"
+   389→   389→      style={{ width: PREVIEW_W, height: Math.round(PREVIEW_W * ratio) }}
+   390→   390→    >
+   391→   391→      <div
+   392→   392→        style={{
+   393→   393→          width: `${sheet.widthMm}mm`,
+   394→   394→          padding: `${paddingMm}mm`,
+   395→   395→          fontSize: `${fontSize}px`,
+   396→   396→          zoom,
+   397→   397→          transformOrigin: "top left",
+   398→   398→        }}
+   399→   399→      >
+   400→   400→        {children}
+   401→   401→      </div>
+   402→   402→    </div>
+   403→   403→  );
+   404→   404→}
+   405→   405→
+   406→   406→function DocBody({ branding, data, mono }: { branding: Branding; data: ReceiptDocData; mono: boolean }) {
+   407→   407→  const money = (m: number) => {
+   408→   408→    try {
+   409→   409→      return new Intl.NumberFormat("en-NG", { style: "currency", currency: branding.currency }).format(m / 100);
+   410→   410→    } catch {
+   411→   411→      return `${branding.currency} ${(m / 100).toFixed(2)}`;
+   412→   412→    }
+   413→   413→  };
+   414→   414→  const isInvoice = data.kind === "INVOICE";
+   415→   415→  const isCredit = data.kind === "CREDIT_NOTE";
+   416→   416→  const docTitle = isInvoice ? "INVOICE" : isCredit ? "CREDIT NOTE" : "OFFICIAL RECEIPT";
+   417→   417→  const center = "text-center";
+   418→   418→  const gap = mono ? "my-1.5 border-t border-dashed border-stone-400" : "my-2 border-t border-stone-200";
+   419→   419→
+   420→   420→  return (
+   421→   421→    <div>
+   422→   422→      <div className={center}>
+   423→   423→        {branding.logoData ? (
+   424→   424→          <img
+   425→   425→            src={branding.logoData}
+   426→   426→            alt={`${branding.facilityName} logo`}
+   427→   427→            className={`mx-auto mb-1 ${mono ? "h-8" : "h-14"} object-contain`}
+   428→   428→          />
+   429→   429→        ) : null}
+   430→   430→        <div className={mono ? "text-[11px] font-bold uppercase" : "text-base font-bold uppercase tracking-wide"}>
+   431→   431→          {branding.facilityName}
+   432→   432→        </div>
+   433→   433→        <div className="text-[10px] text-stone-600">
+   434→   434→          {branding.address ? <div>{branding.address}</div> : null}
+   435→   435→          {branding.phone ? <div>Tel: {branding.phone}</div> : null}
+   436→   436→        </div>
+   437→   437→        <div className="mt-1 font-semibold">{docTitle}</div>
+   438→   438→      </div>
+   439→   439→
+   440→   440→      <div className={gap} />
+   441→   441→
+   442→   442→      <div className="grid grid-cols-2 gap-x-2 text-[10px]">
+   443→   443→        <div>No: <span className="font-semibold">{data.number}</span></div>
+   444→   444→        <div className="text-right">{data.dateTime}</div>
+   445→   445→        <div className="col-span-2">{isCredit ? "Credit for" : "Patient/Customer"}: <span className="font-semibold">{data.issuedTo}</span></div>
+   446→   446→        <div className="col-span-2">Issued by: {data.cashier}</div>
+   447→   447→      </div>
+   448→   448→
+   449→   449→      <div className={gap} />
+   450→   450→
+   451→   451→      <table className="w-full text-[10px]">
+   452→   452→        <thead>
+   453→   453→          <tr className="text-left">
+   454→   454→            <th className="pb-1">Item</th>
+   455→   455→            <th className="pb-1 text-right">Qty</th>
+   456→   456→            <th className="pb-1 text-right">Rate</th>
+   457→   457→            <th className="pb-1 text-right">Amt</th>
+   458→   458→          </tr>
+   459→   459→        </thead>
+   460→   460→        <tbody>
+   461→   461→          {data.lines.map((line, i) => (
+   462→   462→            <tr key={i} className="align-top break-inside-avoid">
+   463→   463→              <td className="pb-1 pr-1">{line.name}</td>
+   464→   464→              <td className="pb-1 text-right">{line.quantity}</td>
+   465→   465→              <td className="pb-1 text-right">{money(line.unitPriceMinor)}</td>
+   466→   466→              <td className="pb-1 text-right">{money(line.totalMinor)}</td>
+   467→   467→            </tr>
+   468→   468→          ))}
+   469→   469→        </tbody>
+   470→   470→      </table>
+   471→   471→
+   472→   472→      <div className={gap} />
+   473→   473→
+   474→   474→      <div className="space-y-0.5 text-[10px]">
+   475→   475→        <div className="flex justify-between"><span>Subtotal</span><span>{money(data.subtotalMinor)}</span></div>
+   476→   476→        {data.discountMinor > 0 ? (
+   477→   477→          <div className="flex justify-between"><span>Discount</span><span>-{money(data.discountMinor)}</span></div>
+   478→   478→        ) : null}
+   479→   479→        <div className="flex justify-between text-[11px] font-bold">
+   480→   480→          <span>{isInvoice ? "Total due" : isCredit ? "Refund total" : "Total"}</span>
+   481→   481→          <span>{money(data.totalMinor)}</span>
+   482→   482→        </div>
+   483→   483→        {!isInvoice ? (
+   484→   484→          <>
+   485→   485→            <div className="flex justify-between"><span>{isCredit ? "Refund method" : "Paid"} ({data.method})</span><span>{money(data.amountPaidMinor ?? data.totalMinor)}</span></div>
+   486→   486→            {data.reference ? <div className="flex justify-between"><span>Ref</span><span className="truncate pl-2">{data.reference}</span></div> : null}
+   487→   487→          </>
+   488→   488→        ) : (
+   489→   489→          <div className="flex justify-between"><span>Amount paid</span><span>{money(data.amountPaidMinor ?? 0)}</span></div>
+   490→   490→        )}
+   491→   491→      </div>
+   492→   492→
+   493→   493→      <div className={gap} />
+   494→   494→
+   495→   495→      <div className={`${center} text-[9px] text-stone-600`}>
+   496→   496→        {data.reprint ? <div className="mb-1 font-bold text-stone-800">** REPRINT **</div> : null}
+   497→   497→        <div>{isInvoice ? branding.reportFooter ?? "Thank you." : branding.receiptFooter ?? "Thank you."}</div>
+   498→   498→        <div className="mt-1">{branding.facilityName} · {data.number}</div>
+   499→   499→      </div>
+   500→   500→    </div>
+   501→   501→  );
+   502→   502→}
+   503→   503→
+   504→   504→/* ─── Page-level print: any paper size for full-page reports ─────────────── */
+   505→   505→
+   506→   506→const PAGE_PRINT_KEY = "curavilo.pageprint.v1";
+   507→   507→
+   508→   508→interface PagePrintSettings {
+   509→   509→  profileKey: PrintProfileKey;
+   510→   510→  orientation: Orientation;
+   511→   511→  customWidthMm: number;
+   512→   512→  customHeightMm: number;
+   513→   513→  customUnit: Unit;
+   514→   514→}
+   515→   515→
+   516→   516→const PAGE_PRINT_DEFAULTS: PagePrintSettings = {
+   517→   517→  profileKey: "A4_STANDARD",
+   518→   518→  orientation: "portrait",
+   519→   519→  customWidthMm: 210,
+   520→   520→  customHeightMm: 297,
+   521→   521→  customUnit: "mm",
+   522→   522→};
+   523→   523→
+   524→   524→export function PagePrintButton({ label = "Print", className }: { label?: string; className?: string }) {
+   525→   525→  const [cfg, setCfg] = useState<PagePrintSettings>(() => {
+   526→   526→    if (typeof window === "undefined") return PAGE_PRINT_DEFAULTS;
+   527→   527→    try {
+   528→   528→      const raw = window.localStorage.getItem(PAGE_PRINT_KEY);
+   529→   529→      return raw ? { ...PAGE_PRINT_DEFAULTS, ...(JSON.parse(raw) as Partial<PagePrintSettings>) } : PAGE_PRINT_DEFAULTS;
+   530→   530→    } catch {
+   531→   531→      return PAGE_PRINT_DEFAULTS;
+   532→   532→    }
+   533→   533→  });
+   534→   534→
+   535→   535→  useEffect(() => {
+   536→   536→    try {
+   537→   537→      window.localStorage.setItem(PAGE_PRINT_KEY, JSON.stringify(cfg));
+   538→   538→    } catch {
+   539→   539→      // storage unavailable
+   540→   540→    }
+   541→   541→    const sheet = resolveSheet({ ...cfg, marginMm: 0, scalePct: 100 });
+   542→   542→    const size = sheet.heightMm === null ? `${fmtMm(sheet.widthMm)}mm auto` : `${fmtMm(sheet.widthMm)}mm ${fmtMm(sheet.heightMm)}mm`;
+   543→   543→    let style = document.querySelector<HTMLStyleElement>("style[data-page-print]");
+   544→   544→    if (!style) {
+   545→   545→      style = document.createElement("style");
+   546→   546→      style.setAttribute("data-page-print", "true");
+   547→   547→      document.head.appendChild(style);
+   548→   548→    }
+   549→   549→    style.textContent = `@media print { @page { size: ${size}; margin: 8mm; } }`;
+   550→   550→    return () => {
+   551→   551→      style.textContent = "";
+   552→   552→    };
+   553→   553→  }, [cfg]);
+   554→   554→
+   555→   555→  const update = (patch: Partial<PagePrintSettings>) => setCfg((prev) => ({ ...prev, ...patch }));
+   556→   556→  const thermal = isThermal(cfg.profileKey);
+   557→   557→
+   558→   558→  return (
+   559→   559→    <div className="flex items-center gap-1.5 no-print">
+   560→   560→      <Popover>
+   561→   561→        <PopoverTrigger asChild>
+   562→   562→          <Button variant="outline" size="sm" className={className} aria-label="Page print settings">
+   563→   563→            <Settings2 className="h-4 w-4" />
+   564→   564→            <span className="sr-only">Page print settings</span>
+   565→   565→          </Button>
+   566→   566→        </PopoverTrigger>
+   567→   567→        <PopoverContent align="end" className="w-72 space-y-2.5">
+   568→   568→          <div className="space-y-1">
+   569→   569→            <Label className="text-[11px] text-muted-foreground">Paper size</Label>
+   570→   570→            <Select value={cfg.profileKey} onValueChange={(v) => update({ profileKey: v as PrintProfileKey })}>
+   571→   571→              <SelectTrigger aria-label="Page paper size"><SelectValue /></SelectTrigger>
+   572→   572→              <SelectContent>
+   573→   573→                {Object.values(PRINT_PROFILES).map((p) => (
+   574→   574→                  <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+   575→   575→                ))}
+   576→   576→                <SelectItem value="CUSTOM">Custom size…</SelectItem>
+   577→   577→              </SelectContent>
+   578→   578→            </Select>
+   579→   579→          </div>
+   580→   580→          {cfg.profileKey === "CUSTOM" ? (
+   581→   581→            <div className="flex items-end gap-2">
+   582→   582→              <div className="flex-1 space-y-1">
+   583→   583→                <Label className="text-[11px] text-muted-foreground">Width</Label>
+   584→   584→                <Input
+   585→   585→                  type="number"
+   586→   586→                  min={10}
+   587→   587→                  value={cfg.customUnit === "mm" ? cfg.customWidthMm : Math.round((cfg.customWidthMm / MM_PER_IN) * 100) / 100}
+   588→   588→                  onChange={(e) => update({ customWidthMm: Math.max(10, Number(e.target.value) || 0) * (cfg.customUnit === "in" ? MM_PER_IN : 1) })}
+   589→   589→                />
+   590→   590→              </div>
+   591→   591→              <div className="flex-1 space-y-1">
+   592→   592→                <Label className="text-[11px] text-muted-foreground">Height</Label>
+   593→   593→                <Input
+   594→   594→                  type="number"
+   595→   595→                  min={10}
+   596→   596→                  value={cfg.customUnit === "mm" ? cfg.customHeightMm : Math.round((cfg.customHeightMm / MM_PER_IN) * 100) / 100}
+   597→   597→                  onChange={(e) => update({ customHeightMm: Math.max(10, Number(e.target.value) || 0) * (cfg.customUnit === "in" ? MM_PER_IN : 1) })}
+   598→   598→                />
+   599→   599→              </div>
+   600→   600→              <Select value={cfg.customUnit} onValueChange={(v) => update({ customUnit: v as Unit })}>
+   601→   601→                <SelectTrigger className="w-[70px]" aria-label="Unit"><SelectValue /></SelectTrigger>
+   602→   602→                <SelectContent>
+   603→   603→                  <SelectItem value="mm">mm</SelectItem>
+   604→   604→                  <SelectItem value="in">inch</SelectItem>
+   605→   605→                </SelectContent>
+   606→   606→              </Select>
+   607→   607→            </div>
+   608→   608→          ) : null}
+   609→   609→          {!thermal ? (
+   610→   610→            <div className="space-y-1">
+   611→   611→              <Label className="text-[11px] text-muted-foreground">Orientation</Label>
+   612→   612→              <div className="flex h-9 overflow-hidden rounded-md border">
+   613→   613→                {(["portrait", "landscape"] as Orientation[]).map((o) => (
+   614→   614→                  <button
+   615→   615→                    key={o}
+   616→   616→                    type="button"
+   617→   617→                    onClick={() => update({ orientation: o })}
+   618→   618→                    className={`flex-1 text-xs transition ${cfg.orientation === o ? "bg-teal-600 font-medium text-white" : "bg-white text-stone-500 hover:bg-teal-50"}`}
+   619→   619→                  >
+   620→   620→                    {o === "portrait" ? "Portrait" : "Landscape"}
+   621→   621→                  </button>
+   622→   622→                ))}
+   623→   623→              </div>
+   624→   624→            </div>
+   625→   625→          ) : null}
+   626→   626→          <p className="text-[11px] text-muted-foreground">Applies to this page when you print. Your choice is remembered.</p>
+   627→   627→        </PopoverContent>
+   628→   628→      </Popover>
+   629→   629→      <Button variant="outline" size="sm" onClick={() => window.print()} className={className}>
+   630→   630→        <Printer className="mr-2 h-4 w-4" /> {label}
+   631→   631→      </Button>
+   632→   632→    </div>
+   633→   633→  );
+   634→   634→}
+   635→   635→

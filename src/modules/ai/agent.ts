@@ -53,6 +53,8 @@ Respond with STRICT JSON only, no markdown, no prose. Exactly ONE of these shape
 
 Routing guidance - be flexible, not rigid:
 - Anything about THIS facility's records (counts, revenue, patients, appointments, stock, follow-ups, staff) -> the matching data tool(s). Use multi-step when a question has several parts.
+- Accounting/finance questions about expenses, spending, expense approvals, net position or P&L -> accounting.summary.
+- People/HR questions about headcount, who is on leave, pending leave requests, certifications expiring, attendance -> hr.summary.
 - Medical/clinical questions (diagnosis support, differentials, workup, interpreting findings or results, drug information, dosing, interactions, guideline recommendations) -> {"tool":"knowledge.research","params":{"mode":"clinical","query":"<concise self-contained search query>"}}. Healthcare professionals rely on these answers - plan the best search query.
 - Mixed questions (facility data + clinical knowledge) -> multi-step including knowledge.research.
 - "How do I ..." questions about using Curavilo -> {"tool":"knowledge.research","params":{"mode":"platform","query":"<the task>"}}.

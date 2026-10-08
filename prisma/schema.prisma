@@ -255,6 +255,8 @@ model StaffMember {
   certifications StaffCertification[]
   leaveRequests  LeaveRequest[]
   referralsReceived Referral[] @relation("ReferralStaff")
+  performanceReviews PerformanceReview[]
+  attendanceLogs AttendanceLog[]
 
   @@index([orgId, facilityId])
   @@index([facilityId, designation])
@@ -476,6 +478,72 @@ model Payment {
   @@unique([orgId, number])
   @@index([orgId, invoiceId])
   @@index([orgId, facilityId, createdAt])
+}
+
+// ─── Accounting (expenses & management accounting) ─────────────────────────
+
+model Expense {
+  id            String   @id @default(cuid())
+  orgId         String
+  facilityId    String
+  category      String   @default("OPERATIONS") // RENT | UTILITIES | SALARIES | SUPPLIES | EQUIPMENT | MAINTENANCE | MARKETING | INSURANCE | TRANSPORT | TAX | OPERATIONS | OTHER
+  description   String
+  vendor        String?
+  reference     String?
+  amountMinor   Int
+  currency      String   @default("NGN")
+  method        String   @default("CASH") // CASH | TRANSFER | CARD | POS | CHEQUE
+  status        String   @default("PENDING") // PENDING | APPROVED | PAID | REJECTED
+  incurredAt    DateTime
+  paidAt        DateTime?
+  requestedByName String
+  approvedByName String?
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orgId, facilityId, status])
+  @@index([orgId, facilityId, incurredAt])
+}
+
+// ─── Human Resources (reviews & attendance) ───────────────────────────────
+
+model PerformanceReview {
+  id           String   @id @default(cuid())
+  orgId        String
+  facilityId   String
+  staffId      String
+  period       String // e.g. "2026 Q3", "2026"
+  reviewerName String
+  overallScore Int // 1..5
+  strengths    String?
+  improvements String?
+  goals        String?
+  status       String   @default("FINAL") // DRAFT | FINAL | ACKNOWLEDGED
+  reviewedAt   DateTime @default(now())
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, facilityId, staffId])
+}
+
+model AttendanceLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  facilityId String
+  staffId   String
+  date      DateTime // day bucket (00:00 local)
+  status    String   @default("PRESENT") // PRESENT | ABSENT | LATE | LEAVE | OFF_DUTY
+  checkInAt DateTime?
+  checkOutAt DateTime?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+  @@index([orgId, facilityId, date])
 }
 
 // ─── Supply chain (POS + inventory) ─────────────────────────────────────────

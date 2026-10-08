@@ -24,8 +24,10 @@ export function downloadTextFile(filename: string, content: string, mime = "text
 
 type ReportData = Record<string, unknown>;
 
+export type ReportType = "revenue" | "volume" | "pharmacy" | "inventory" | "expenses" | "people";
+
 /** Build a CSV document for a report. Money is exported in major units with 2 decimals. */
-export function buildReportCsv(type: "revenue" | "volume" | "pharmacy", data: ReportData, currency: string, period: string, timezone: string): string {
+export function buildReportCsv(type: ReportType, data: ReportData, currency: string, period: string, timezone: string): string {
   const head: unknown[][] = [
     ["Curavilo report", type],
     ["Period", period],
@@ -74,6 +76,10 @@ export function buildReportCsv(type: "revenue" | "volume" | "pharmacy", data: Re
     ]);
   }
 
+  if (type === "inventory") return inventoryCsv(data, currency, head);
+  if (type === "expenses") return expensesCsv(data, currency, head);
+  if (type === "people") return peopleCsv(data, head);
+
   const d = data as { totalMinor: number; salesCount: number; byDay: { date: string; total: number }[]; topItems: { name: string; qty: number; totalMinor: number }[] };
   return toCsv([
     ...head,
@@ -88,5 +94,72 @@ export function buildReportCsv(type: "revenue" | "volume" | "pharmacy", data: Re
     ["Sales per day"],
     ["Date", `Total (${currency})`],
     ...d.byDay.map((r) => [r.date, (r.total / 100).toFixed(2)]),
+  ]);
+}
+
+/** Inventory valuation report CSV. */
+function inventoryCsv(data: ReportData, currency: string, head: unknown[][]): string {
+  const d = data as { items: { sku: string; name: string; category: string; onHand: number; reorderLevel: number; low: boolean; valueMinor: number; expiringLots: number }[]; totalValueMinor: number; lowStockCount: number; expiringCount: number; itemCount: number };
+  return toCsv([
+    ...head,
+    ["Summary"],
+    ["Items", d.itemCount],
+    ["Total stock value", (d.totalValueMinor / 100).toFixed(2)],
+    ["Low stock items", d.lowStockCount],
+    ["Lots expiring in 30 days", d.expiringCount],
+    [],
+    ["Stock detail"],
+    ["SKU", "Item", "Category", "On hand", "Reorder level", "Low", "Expiring lots", `Stock value (${currency})`],
+    ...d.items.map((i) => [i.sku, i.name, i.category, i.onHand, i.reorderLevel, i.low ? "YES" : "no", i.expiringLots, (i.valueMinor / 100).toFixed(2)]),
+  ]);
+}
+
+/** Expense ledger report CSV. */
+function expensesCsv(data: ReportData, currency: string, head: unknown[][]): string {
+  const d = data as { expenses: { date: string; category: string; description: string; vendor: string | null; method: string; status: string; amountMinor: number }[]; totalMinor: number; byCategory: Record<string, number>; pendingCount: number; pendingMinor: number };
+  return toCsv([
+    ...head,
+    ["Summary"],
+    ["Total booked", (d.totalMinor / 100).toFixed(2)],
+    ["Pending approvals", d.pendingCount],
+    ["Pending amount", (d.pendingMinor / 100).toFixed(2)],
+    [],
+    ["By category"],
+    ...Object.entries(d.byCategory).map(([k, v]) => [k, (v / 100).toFixed(2)]),
+    [],
+    ["Expense detail"],
+    ["Date", "Category", "Description", "Vendor", "Method", "Status", `Amount (${currency})`],
+    ...d.expenses.map((e) => [e.date, e.category, e.description, e.vendor ?? "", e.method, e.status, (e.amountMinor / 100).toFixed(2)]),
+  ]);
+}
+
+/** People (HR) report CSV. */
+function peopleCsv(data: ReportData, head: unknown[][]): string {
+  const d = data as {
+    headcount: number; activeCount: number; byDesignation: Record<string, number>;
+    staff: { name: string; designation: string; department: string | null; active: boolean }[];
+    pendingLeave: number; onLeaveToday: number;
+    certificationsExpiring: { staff: string; name: string; expiresAt: string }[];
+    attendanceToday: { present: number; late: number; absent: number; leave: number };
+  };
+  return toCsv([
+    ...head,
+    ["Summary"],
+    ["Headcount", d.headcount],
+    ["Active", d.activeCount],
+    ["Pending leave requests", d.pendingLeave],
+    ["On leave today", d.onLeaveToday],
+    ["Attendance today (present/late/absent/leave)", `${d.attendanceToday.present}/${d.attendanceToday.late}/${d.attendanceToday.absent}/${d.attendanceToday.leave}`],
+    [],
+    ["By designation"],
+    ...Object.entries(d.byDesignation).map(([k, v]) => [k, v]),
+    [],
+    ["Staff directory"],
+    ["Name", "Designation", "Department", "Status"],
+    ...d.staff.map((s) => [s.name, s.designation, s.department ?? "", s.active ? "ACTIVE" : "INACTIVE"]),
+    [],
+    ["Certifications expiring within 30 days"],
+    ["Staff", "Certification", "Expires"],
+    ...d.certificationsExpiring.map((c) => [c.staff, c.name, c.expiresAt]),
   ]);
 }

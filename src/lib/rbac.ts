@@ -34,6 +34,11 @@ export const PERMISSIONS = [
   "inpatient:manage", // wards, beds, admissions, discharge
   "portals:manage", // portal tokens + leave approvals
   "data:manage", // import/export
+  // Accounting + HR departments
+  "accounting:read", // ledgers, expense pipeline, P&L, receivables
+  "accounting:write", // record/approve/pay expenses, adjustments
+  "hr:read", // staff directory, leave, certifications, attendance
+  "hr:manage", // approve leave, reviews, attendance, announcements
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -54,7 +59,9 @@ export const ROLES = [
   "LAB",
   "PHARMACY",
   "BILLING",
+  "ACCOUNTANT",
   "INVENTORY",
+  "HR",
   "STAFF",
 ] as const;
 
@@ -122,6 +129,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "inventory:read", "inventory:write",
     "pos:sell",
     "billing:read",
+    "ai:ask",
   ],
   DENTIST: [
     "patients:read",
@@ -138,6 +146,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "encounters:read",
     "lab:operate",
     "inventory:read",
+    "ai:ask",
   ],
   PHARMACY: [
     "patients:read",
@@ -145,6 +154,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "pos:sell", "pos:refund",
     "billing:read",
     "reports:read",
+    "ai:ask",
   ],
   BILLING: [
     "patients:read",
@@ -153,11 +163,26 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "reports:read",
     "ai:ask",
   ],
+  ACCOUNTANT: [
+    "billing:read", // revenue, invoices, payments ledger
+    "payments:record", // can settle invoices on behalf of billing when needed
+    "accounting:read", "accounting:write",
+    "inventory:read", // stock valuation context
+    "reports:read",
+    "ai:ask",
+  ],
   INVENTORY: [
     "inventory:read", "inventory:write",
     "reports:read",
+    "ai:ask",
   ],
-  STAFF: ["patients:read"],
+  HR: [
+    "staff:read", // personnel directory (non-clinical fields)
+    "hr:read", "hr:manage",
+    "reports:read",
+    "ai:ask",
+  ],
+  STAFF: ["patients:read", "ai:ask"],
 };
 
 export function permissionsForRole(role: string): Permission[] {
@@ -184,6 +209,8 @@ export const MODULE_PERMISSION: Record<string, Permission> = {
   pos: "pos:sell",
   inventory: "inventory:read",
   reports: "reports:read",
+  accounting: "accounting:read",
+  hr: "hr:read",
   ai: "ai:ask",
   lab: "lab:operate",
   wards: "inpatient:manage",

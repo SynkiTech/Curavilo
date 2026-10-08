@@ -7,7 +7,9 @@ import { dashboardStats } from "@/modules/reports";
 
 export async function GET() {
   try {
-    const ctx = await requireAuth("patients:read");
+    // Any authenticated facility member may load the shell of their dashboard;
+    // each dataset inside is individually permission-gated below.
+    const ctx = await requireAuth();
     const stats = await dashboardStats(ctx);
     const p = ctx.permissions;
     const now = new Date();
@@ -84,6 +86,55 @@ export async function GET() {
         returnsMinor: returnsAgg._sum.totalMinor ?? 0,
         currency: ctx.currency,
       };
+    }
+
+    if (p.includes("accounting:read")) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const [expensesAgg, pendingAgg, outstandingAgg] = await Promise.all([
+        db.expense.aggregate({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: { in: ["APPROVED", "PAID"] }, incurredAt: { gte: monthStart } },
+          _sum: { amountMinor: true },
+        }),
+        db.expense.aggregate({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: "PENDING" },
+          _sum: { amountMinor: true }, _count: true,
+        }),
+        db.invoice.aggregate({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: { in: ["ISSUED", "PARTIALLY_PAID"] }, voidedAt: null },
+          _sum: { totalMinor: true, amountPaidMinor: true },
+        }),
+      ]);
+      const outstanding = (outstandingAgg._sum.totalMinor ?? 0) - (outstandingAgg._sum.amountPaidMinor ?? 0);
+      extras.accountingKpis = {
+        currency: ctx.currency,
+        monthExpensesMinor: expensesAgg._sum.amountMinor ?? 0,
+        pendingExpenses: pendingAgg._count ?? 0,
+        pendingExpensesMinor: pendingAgg._sum.amountMinor ?? 0,
+        outstandingMinor: outstanding > 0 ? outstanding : 0,
+        revenueTodayMinor: stats.stats.revenueTodayMinor,
+      };
+    }
+
+    if (p.includes("hr:read")) {
+      const in30 = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+      const [headcount, activeStaff, onLeaveToday, pendingLeaves, certsExpiring, recentHires] = await Promise.all([
+        db.staffMember.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId } }),
+        db.staffMember.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true } }),
+        db.leaveRequest.count({
+          where: { orgId: ctx.orgId, status: "APPROVED", fromAt: { lte: now }, toAt: { gte: dayStart } },
+        }),
+        db.leaveRequest.count({ where: { orgId: ctx.orgId, status: "PENDING" } }),
+        db.staffCertification.count({
+          where: { orgId: ctx.orgId, expiresAt: { lte: in30, gte: now } },
+        }),
+        db.staffMember.findMany({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId },
+          orderBy: { id: "desc" },
+          take: 5,
+          select: { id: true, name: true, designation: true, department: true, active: true },
+        }),
+      ]);
+      extras.hrKpis = { headcount, activeStaff, onLeaveToday, pendingLeaves, certsExpiring, recentHires };
     }
 
     if (p.includes("lab:operate")) {

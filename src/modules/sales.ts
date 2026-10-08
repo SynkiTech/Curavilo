@@ -23,8 +23,11 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
       lastError = error;
       const code = (error as { code?: string })?.code;
       const msg = error instanceof Error ? error.message : String(error);
+      // P2002 on the sale number unique key is safe to retry: each attempt
+      // allocates a fresh document number, so the next try cannot collide.
+      // P2024/P2034/timeouts are SQLite writer-lock contention.
       const transient =
-        code === "P2024" || code === "P2034" ||
+        code === "P2024" || code === "P2034" || code === "P2002" ||
         msg.includes("Socket timeout") || msg.includes("database is locked");
       if (!transient || attempt === attempts) throw error;
       await new Promise((r) => setTimeout(r, 250 * attempt));

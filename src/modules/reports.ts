@@ -14,53 +14,87 @@ export async function dashboardStats(ctx: AuthContext) {
   const profile = ctx.serviceProfileKey;
   const trendStart = new Date(start.getTime() - 13 * 24 * 3600 * 1000);
 
-  const [patientsToday, waiting, called, inService, completedToday, appointmentsToday, revenueAgg, lowStockCount, overdueFollowUps, recentPayments, trendPayments, trendEncounters] = await Promise.all([
-    db.patient.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, createdAt: { gte: start } } }),
-    db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "WAITING" } }),
-    db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "CALLED" } }),
-    db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "IN_SERVICE" } }),
-    db.encounter.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, startedAt: { gte: start }, status: "COMPLETED" } }),
-    db.appointment.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, scheduledAt: { gte: start, lt: end } } }),
-    db.payment.aggregate({
-      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null, createdAt: { gte: start } },
-      _sum: { amountMinor: true },
-    }),
-    db.inventoryItem.count({
-      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true, reorderLevel: { gte: 1 }, lots: { none: {} } },
-    }),
-    db.followUp.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: "PENDING", dueAt: { lt: new Date() } } }),
-    db.payment.findMany({
-      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      include: { invoice: { include: { patient: true } } },
-    }),
-    db.payment.findMany({
-      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null, createdAt: { gte: trendStart } },
-      select: { createdAt: true, amountMinor: true, method: true },
-    }),
-    db.encounter.findMany({
-      where: { orgId: ctx.orgId, facilityId: ctx.facilityId, startedAt: { gte: trendStart } },
-      select: { startedAt: true },
-    }),
-  ]);
+  // Permission-aware blocks: every department only receives aggregates its
+  // permission set unlocks. Shapes stay identical; disallowed groups return
+  // empty/zero values that the widget gates hide anyway (ADR 0011).
+  const p = ctx.permissions;
+  const canPatients = p.includes("patients:read");
+  const canBilling = p.includes("billing:read");
+  const canInventory = p.includes("inventory:read");
+
+  const opsBlock = canPatients
+    ? Promise.all([
+        db.patient.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, createdAt: { gte: start } } }),
+        db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "WAITING" } }),
+        db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "CALLED" } }),
+        db.queueEntry.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: "IN_SERVICE" } }),
+        db.encounter.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, startedAt: { gte: start }, status: "COMPLETED" } }),
+        db.appointment.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, scheduledAt: { gte: start, lt: end } } }),
+        db.followUp.count({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: "PENDING", dueAt: { lt: new Date() } } }),
+      ])
+    : Promise.all([0, 0, 0, 0, 0, 0, 0] as const);
+
+  const financeBlock = canBilling
+    ? Promise.all([
+        db.payment.aggregate({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null, createdAt: { gte: start } },
+          _sum: { amountMinor: true },
+        }),
+        db.payment.findMany({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          include: { invoice: { include: { patient: true } } },
+        }),
+        db.payment.findMany({
+          where: { orgId: ctx.orgId, facilityId: ctx.facilityId, voidedAt: null, createdAt: { gte: trendStart } },
+          select: { createdAt: true, amountMinor: true, method: true },
+        }),
+      ])
+    : Promise.all([
+        Promise.resolve({ _sum: { amountMinor: null as number | null } }),
+        Promise.resolve([] as Awaited<ReturnType<typeof db.payment.findMany>>),
+        Promise.resolve([] as { createdAt: Date; amountMinor: number; method: string }[]),
+      ]);
+
+  const supplyBlock = canInventory
+    ? db.inventoryItem.count({
+        where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true, reorderLevel: { gte: 1 }, lots: { none: {} } },
+      })
+    : Promise.resolve(0);
+
+  const trendEncounters = canPatients
+    ? db.encounter.findMany({
+        where: { orgId: ctx.orgId, facilityId: ctx.facilityId, startedAt: { gte: trendStart } },
+        select: { startedAt: true },
+      })
+    : Promise.resolve([] as { startedAt: Date }[]);
+
+  const [ops, finance, lowStockCount, encTrend] = await Promise.all([opsBlock, financeBlock, supplyBlock, trendEncounters]);
+
+  const [patientsToday, waiting, called, inService, completedToday, appointmentsToday, overdueFollowUps] = ops;
+  const [revenueAgg, recentPayments, trendPayments] = finance;
 
   // Stock on hand vs reorder level
-  const items = await db.inventoryItem.findMany({
-    where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true },
-    include: { lots: true },
-  });
+  const items = canInventory
+    ? await db.inventoryItem.findMany({
+        where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true },
+        include: { lots: true },
+      })
+    : [];
   const lowStock = items
     .map((i) => ({ id: i.id, name: i.name, stockOnHand: i.lots.reduce((s, l) => s + l.qtyRemaining, 0), reorderLevel: i.reorderLevel }))
     .filter((i) => i.stockOnHand <= i.reorderLevel)
     .slice(0, 8);
 
-  const queueSnapshot = await db.queueEntry.findMany({
-    where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: { in: ["WAITING", "CALLED", "IN_SERVICE"] } },
-    orderBy: { number: "asc" },
-    include: { patient: true },
-    take: 12,
-  });
+  const queueSnapshot = canPatients
+    ? await db.queueEntry.findMany({
+        where: { orgId: ctx.orgId, facilityId: ctx.facilityId, checkedInAt: { gte: start }, status: { in: ["WAITING", "CALLED", "IN_SERVICE"] } },
+        orderBy: { number: "asc" },
+        include: { patient: true },
+        take: 12,
+      })
+    : [];
 
   // 14-day trend series (UTC day buckets, zero-filled)
   const days: string[] = [];
@@ -68,13 +102,13 @@ export async function dashboardStats(ctx: AuthContext) {
   const bucket = (iso: Date) => iso.toISOString().slice(0, 10);
   const revenueByDay = new Map<string, number>(days.map((d) => [d, 0]));
   const revenueByMethod = new Map<string, number>();
-  for (const p of trendPayments) {
-    const d = bucket(p.createdAt);
-    revenueByDay.set(d, (revenueByDay.get(d) ?? 0) + p.amountMinor);
-    revenueByMethod.set(p.method, (revenueByMethod.get(p.method) ?? 0) + p.amountMinor);
+  for (const pay of trendPayments) {
+    const d = bucket(pay.createdAt);
+    revenueByDay.set(d, (revenueByDay.get(d) ?? 0) + pay.amountMinor);
+    revenueByMethod.set(pay.method, (revenueByMethod.get(pay.method) ?? 0) + pay.amountMinor);
   }
   const encountersByDay = new Map<string, number>(days.map((d) => [d, 0]));
-  for (const e of trendEncounters) {
+  for (const e of encTrend) {
     const d = bucket(e.startedAt);
     encountersByDay.set(d, (encountersByDay.get(d) ?? 0) + 1);
   }
@@ -181,5 +215,102 @@ export async function pharmacySalesReport(ctx: AuthContext, from: Date, to: Date
     salesCount: sales.length,
     byDay: [...byDay.entries()].sort().map(([date, total]) => ({ date, total })),
     topItems: [...topItems.values()].sort((a, b) => b.totalMinor - a.totalMinor).slice(0, 10),
+  };
+}
+
+/** Inventory valuation + health: stock on hand, value, low stock and expiry risk. */
+export async function inventoryReport(ctx: AuthContext) {
+  const items = await db.inventoryItem.findMany({
+    where: { orgId: ctx.orgId, facilityId: ctx.facilityId, active: true },
+    include: { lots: { where: { qtyRemaining: { gt: 0 } } } },
+  });
+  const in30 = new Date(Date.now() + 30 * 86_400_000);
+  const rows = items
+    .map((i) => {
+      const onHand = i.lots.reduce((s, l) => s + l.qtyRemaining, 0);
+      const valueMinor = onHand * i.purchasePriceMinor;
+      const expiring = i.lots.filter((l) => l.expiresAt && l.expiresAt.getTime() <= in30.getTime()).length;
+      return {
+        sku: i.sku,
+        name: i.name,
+        category: i.category,
+        onHand,
+        reorderLevel: i.reorderLevel,
+        low: onHand <= i.reorderLevel,
+        valueMinor,
+        expiringLots: expiring,
+      };
+    })
+    .sort((a, b) => b.valueMinor - a.valueMinor);
+  return {
+    items: rows,
+    totalValueMinor: rows.reduce((s, r) => s + r.valueMinor, 0),
+    lowStockCount: rows.filter((r) => r.low).length,
+    expiringCount: rows.reduce((s, r) => s + r.expiringLots, 0),
+    itemCount: rows.length,
+  };
+}
+
+/** Expense ledger report for a period (accounting). */
+export async function expensesReport(ctx: AuthContext, from: Date, to: Date) {
+  const rows = await db.expense.findMany({
+    where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: { in: ["APPROVED", "PAID"] }, incurredAt: { gte: from, lte: to } },
+    orderBy: { incurredAt: "asc" },
+  });
+  const byCategory = rows.reduce<Record<string, number>>((acc, e) => {
+    acc[e.category] = (acc[e.category] ?? 0) + e.amountMinor;
+    return acc;
+  }, {});
+  const pending = await db.expense.aggregate({
+    where: { orgId: ctx.orgId, facilityId: ctx.facilityId, status: "PENDING" },
+    _sum: { amountMinor: true }, _count: true,
+  });
+  return {
+    expenses: rows.map((e) => ({
+      date: e.incurredAt.toISOString().slice(0, 10),
+      category: e.category,
+      description: e.description,
+      vendor: e.vendor,
+      method: e.method,
+      status: e.status,
+      amountMinor: e.amountMinor,
+    })),
+    totalMinor: rows.reduce((s, e) => s + e.amountMinor, 0),
+    byCategory,
+    pendingCount: pending._count ?? 0,
+    pendingMinor: pending._sum.amountMinor ?? 0,
+  };
+}
+
+/** People report for HR: headcount, leave pipeline, certification and attendance snapshot. */
+export async function peopleReport(ctx: AuthContext) {
+  const now = new Date();
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  const in30 = new Date(now.getTime() + 30 * 86_400_000);
+  const [staff, pendingLeave, onLeave, certs, attendance] = await Promise.all([
+    db.staffMember.findMany({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId }, orderBy: { name: "asc" } }),
+    db.leaveRequest.count({ where: { orgId: ctx.orgId, status: "PENDING" } }),
+    db.leaveRequest.count({ where: { orgId: ctx.orgId, status: "APPROVED", fromAt: { lte: now }, toAt: { gte: dayStart } } }),
+    db.staffCertification.findMany({ where: { orgId: ctx.orgId, expiresAt: { lte: in30, gte: now } }, include: { staff: { select: { name: true } } } }),
+    db.attendanceLog.findMany({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, date: { gte: dayStart } } }),
+  ]);
+  const byDesignation = staff.reduce<Record<string, number>>((acc, s) => {
+    acc[s.designation] = (acc[s.designation] ?? 0) + 1;
+    return acc;
+  }, {});
+  return {
+    headcount: staff.length,
+    activeCount: staff.filter((s) => s.active).length,
+    byDesignation,
+    staff: staff.map((s) => ({ name: s.name, designation: s.designation, department: s.department, active: s.active })),
+    pendingLeave,
+    onLeaveToday: onLeave,
+    certificationsExpiring: certs.map((c) => ({ staff: c.staff?.name ?? "Staff", name: c.name, expiresAt: c.expiresAt.toISOString().slice(0, 10) })),
+    attendanceToday: {
+      present: attendance.filter((a) => a.status === "PRESENT").length,
+      late: attendance.filter((a) => a.status === "LATE").length,
+      absent: attendance.filter((a) => a.status === "ABSENT").length,
+      leave: attendance.filter((a) => a.status === "LEAVE").length,
+    },
   };
 }
