@@ -28,6 +28,19 @@ export interface DuplicateWarning {
   reason: string;
 }
 
+/**
+ * Patient-registry scope (security hardening, facility PHI isolation):
+ * OWNER/ADMIN span the whole organization; every other role is confined to the
+ * active facility. Cross-facility lookups by non-admins fail closed (not found).
+ */
+export function patientScope(ctx: AuthContext): { orgId: string; facilityId?: string } {
+  const spansOrg =
+    ctx.role === "OWNER" ||
+    ctx.role === "ADMIN" ||
+    ctx.permissions.includes("org:manage");
+  return spansOrg ? { orgId: ctx.orgId } : { orgId: ctx.orgId, facilityId: ctx.facilityId };
+}
+
 /** Configurable duplicate detection: exact phone, or same first+last name (spec §14). */
 async function findPotentialDuplicates(orgId: string, input: { phone: string; firstName: string; lastName: string }): Promise<DuplicateWarning[]> {
   const byPhone = await db.patient.findMany({
@@ -102,9 +115,10 @@ export async function registerPatient(ctx: AuthContext, input: z.infer<typeof pa
 
 export async function searchPatients(ctx: AuthContext, query: string, limit = 50) {
   const q = query.trim();
+  const base = patientScope(ctx);
   const where = q
     ? {
-        orgId: ctx.orgId,
+        ...base,
         active: true,
         OR: [
           { firstName: { contains: q } },
@@ -113,7 +127,7 @@ export async function searchPatients(ctx: AuthContext, query: string, limit = 50
           { phone: { contains: q } },
         ],
       }
-    : { orgId: ctx.orgId, active: true };
+    : { ...base, active: true };
 
   return db.patient.findMany({
     where,
@@ -127,7 +141,7 @@ export async function searchPatients(ctx: AuthContext, query: string, limit = 50
 
 export async function getPatient360(ctx: AuthContext, patientId: string) {
   const patient = await db.patient.findFirst({
-    where: { id: patientId, orgId: ctx.orgId, active: true },
+    where: { id: patientId, ...patientScope(ctx), active: true },
   });
   if (!patient) return null;
 
@@ -166,7 +180,7 @@ export async function getPatient360(ctx: AuthContext, patientId: string) {
 }
 
 export async function updatePatient(ctx: AuthContext, patientId: string, input: z.infer<typeof patientSchema>) {
-  const existing = await db.patient.findFirst({ where: { id: patientId, orgId: ctx.orgId, active: true } });
+  const existing = await db.patient.findFirst({ where: { id: patientId, ...patientScope(ctx), active: true } });
   if (!existing) return null;
 
   const patient = await db.patient.update({

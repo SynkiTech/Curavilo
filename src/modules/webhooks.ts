@@ -1,13 +1,23 @@
 // Webhook integration (spec §134, §140) - outbound event delivery with HMAC
 // signatures, retry with exponential backoff, and dead-lettering. Inbound
 // custom webhooks enter the platform as outbox events (CUSTOM_WEBHOOK trigger).
+// Security: destinations pass SSRF validation (no private/loopback/metadata),
+// signatures are keyed on the real secret (AES-GCM encrypted at rest), and
+// inbound verification enforces timestamp freshness (anti-replay).
 
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/api";
+import { validateOutboundUrl } from "@/lib/url-guard";
+import { encryptSecret, decryptSecret } from "@/lib/secret-box";
 
 const MAX_DELIVERY_ATTEMPTS = 5;
+const SIGNATURE_TOLERANCE_SECONDS = 5 * 60; // inbound replay window
 
 export async function createEndpoint(ctx: { orgId: string }, input: { url: string; events: string[]; secret?: string }) {
+  // SSRF guard: reject private/loopback/metadata destinations at registration time.
+  const guard = await validateOutboundUrl(input.url, { allowHttp: process.env.NODE_ENV !== "production" });
+  if (!guard.ok) throw new AppError(400, "invalid_url", `Webhook URL rejected: ${guard.reason}`);
   const key = `whk_${randomBytes(8).toString("hex")}`;
   const secret = input.secret ?? randomBytes(24).toString("hex");
   const { hashWebhookSecret } = await import("@/lib/comms");
@@ -17,6 +27,7 @@ export async function createEndpoint(ctx: { orgId: string }, input: { url: strin
       key,
       url: input.url,
       secretHash: hashWebhookSecret(secret),
+      secretEnc: encryptSecret(secret), // read-back copy for HMAC signing (AES-256-GCM)
       events: input.events.join(","),
       active: true,
     },
@@ -78,7 +89,15 @@ export async function processWebhookDeliveries(orgId: string, limit = 10) {
     const attempts = d.attempts + 1;
     const timestamp = Math.floor(Date.now() / 1000).toString();
     try {
-      const sig = sign(d.endpoint.secretHash, d.payload, timestamp);
+      // Re-validate the destination on every attempt (DNS may have changed;
+      // the guard doubles as anti-DNS-rebinding re-check).
+      const guard = await validateOutboundUrl(d.endpoint.url, { allowHttp: process.env.NODE_ENV !== "production" });
+      if (!guard.ok) throw new Error(`Blocked by SSRF guard: ${guard.reason}`);
+      // Sign with the real secret. Legacy endpoints (created before the
+      // encrypted copy existed) fall back to the stored hash so they keep
+      // delivering; new endpoints always sign with the secret itself.
+      const signingKey = decryptSecret(d.endpoint.secretEnc) ?? d.endpoint.secretHash;
+      const sig = sign(signingKey, d.payload, timestamp);
       const res = await fetch(d.endpoint.url, {
         method: "POST",
         headers: {
@@ -87,6 +106,7 @@ export async function processWebhookDeliveries(orgId: string, limit = 10) {
           "X-Curavilo-Signature": `t=${timestamp},v1=${sig}`,
         },
         body: d.payload,
+        redirect: "error", // never follow redirects: they can re-enter private space
         signal: AbortSignal.timeout(10_000),
       });
       if (res.ok) {
@@ -120,6 +140,9 @@ export function verifyInboundSignature(secret: string, body: string, header: str
   const m = /t=(\d+),v1=([a-f0-9]+)/.exec(header);
   if (!m) return false;
   const [, timestamp, sig] = m;
+  // Replay protection: signatures older than the tolerance window are rejected.
+  const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+  if (!Number.isFinite(age) || age > SIGNATURE_TOLERANCE_SECONDS) return false;
   const expected = sign(secret, body, timestamp);
   const a = Buffer.from(expected);
   const b = Buffer.from(sig);

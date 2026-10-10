@@ -19,10 +19,17 @@ export const registerSchema = z.object({
     address: z.string().max(300).optional().nullable(),
     phone: z.string().max(30).optional().nullable(),
     email: z.string().email().max(120).optional().nullable().or(z.literal("")),
-    logoData: z.string().max(400_000).optional().nullable(),
+    // Logos are raster data URLs only (PNG/JPEG/WebP); SVG is never accepted
+    // (SVG can carry script). Same policy as the settings page.
+    logoData: z
+      .string()
+      .max(400_000)
+      .optional()
+      .nullable()
+      .refine((v) => !v || /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(v), "Logo must be a PNG, JPEG or WebP data URL"),
     reportFooter: z.string().max(300).optional().nullable(),
     receiptFooter: z.string().max(300).optional().nullable(),
-    brandColor: z.string().max(20).optional().nullable(),
+    brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Brand color must be a hex color like #0f766e").max(7).optional().nullable().or(z.literal("")),
   }),
   admin: z.object({
     name: z.string().min(2).max(80),

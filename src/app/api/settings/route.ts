@@ -32,7 +32,7 @@ const patchSchema = z.object({
     .nullable(),
   reportFooter: z.string().max(300).optional().nullable(),
   receiptFooter: z.string().max(300).optional().nullable(),
-  brandColor: z.string().max(20).optional().nullable(),
+  brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Brand color must be a hex color like #0f766e").optional().nullable().or(z.literal("")),
   // Per-facility terminology overrides: empty string removes an override
   termOverrides: z.partialRecord(z.enum(TERMINOLOGY_KEYS as [string, ...string[]]), z.string().max(60)).optional(),
   // Switching the service profile changes terminology defaults and encounter form templates

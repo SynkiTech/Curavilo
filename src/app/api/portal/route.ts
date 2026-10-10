@@ -41,7 +41,8 @@ export async function POST(request: Request) {
     // Patient portal (unauthenticated actions)
     if (scope === "login") {
       const body = await parseBody(request, z.object({ mrn: z.string().min(2).max(30), code: z.string().min(6).max(40) }));
-      const key = `${request.headers.get("x-forwarded-for") ?? "ip"}:${body.mrn}`;
+      const { clientIp } = await import("@/lib/rate-limit");
+      const key = `${clientIp(request)}:${body.mrn}`;
       if (portalRateLimited(key)) {
         recordLoginAttempt(key);
         return ok({ error: "Too many attempts. Try again in 15 minutes." }, 429);
@@ -49,9 +50,8 @@ export async function POST(request: Request) {
       recordLoginAttempt(key);
       const session = await portalLogin(body.mrn, body.code);
       const res = NextResponse.json({ ok: true, patientPortal: true });
-      res.cookies.set(PORTAL_COOKIE, session.tokenHash, {
-        httpOnly: true, sameSite: "lax", path: "/", maxAge: 12 * 3600,
-      });
+      const { authCookieAttrs } = await import("@/lib/auth");
+      res.cookies.set(PORTAL_COOKIE, session.tokenHash, authCookieAttrs(12 * 3600));
       return res;
     }
     if (scope === "logout") {

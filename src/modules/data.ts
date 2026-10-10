@@ -118,12 +118,24 @@ export async function previewPatientImport(ctx: AuthContext, csv: string) {
 
 export async function commitPatientImport(ctx: AuthContext, rows: Array<{ firstName: string; lastName: string; phone: string; sex: string }>) {
   if (rows.length === 0 || rows.length > 500) throw new AppError(400, "bad_request", "Import must contain 1–500 rows.");
+  // Defense in depth: rows arrive Zod-validated from the route, but the module
+  // independently picks ONLY the four permitted fields. Even if a caller bypasses
+  // the route schema, orgId/facilityId/mrn and every other column cannot be
+  // injected through the row object (mass assignment / cross-tenant write).
   const created = await db.$transaction(async (tx) => {
     const patients: Array<{ id: string }> = [];
     for (const row of rows) {
       const mrn = await nextDocNumber(tx, ctx.orgId, "PATIENT");
       patients.push(await tx.patient.create({
-        data: { orgId: ctx.orgId, facilityId: ctx.facilityId, mrn, ...row },
+        data: {
+          orgId: ctx.orgId,
+          facilityId: ctx.facilityId,
+          mrn,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          phone: row.phone,
+          sex: row.sex === "MALE" ? "MALE" : "FEMALE",
+        },
       }));
     }
     return patients;
@@ -139,9 +151,12 @@ export async function commitPatientImport(ctx: AuthContext, rows: Array<{ firstN
 // ─── Exports (audited, tenant-scoped) ───────────────────────────────────────
 
 function toCsv(headers: string[], rows: Array<Array<string | number | null | undefined>>): string {
+  // Formula-injection guard: leading = + - @ (and tab/CR) get a leading
+  // apostrophe so spreadsheet apps treat the cell as text, never a formula.
   const esc = (v: string | number | null | undefined) => {
     const s = v === null || v === undefined ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    const guarded = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+    return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
   };
   return [headers.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
 }

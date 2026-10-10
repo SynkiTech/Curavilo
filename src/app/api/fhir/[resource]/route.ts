@@ -1,26 +1,39 @@
 // FHIR export endpoint - /api/fhir/{Resource}?count=50 (read-only, auth'd, audited)
 import { NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
-import { getAuth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api";
 import { FHIR_RESOURCES, FHIR_PERMISSION, mapResource, type FhirResource } from "@/lib/fhir";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+
+function outcome(status: number, code: string, diagnostics: string) {
+  return NextResponse.json(
+    { resourceType: "OperationOutcome", issue: [{ severity: "error", code, diagnostics }] },
+    { status },
+  );
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ resource: string }> }) {
-  const ctx = await getAuth();
-  if (!ctx) return NextResponse.json({ error: { code: "unauthorized", message: "Authentication required." } }, { status: 401 });
+  // requireAuth (not raw getAuth) so mustChangePassword accounts and missing
+  // permissions fail closed through the standard guard.
+  let ctx;
+  try {
+    ctx = await requireAuth();
+  } catch {
+    return outcome(401, "unauthorized", "Authentication required.");
+  }
+
+  // Bulk-PII surface: rate limited per user to blunt scraping/enumeration.
+  if (!rateLimit(`fhir:${clientIp(request)}:${ctx.userId}`, 30, 10 * 60_000)) {
+    return outcome(429, "too-many-requests", "Too many exports. Try again later.");
+  }
 
   const { resource } = await params;
   if (!FHIR_RESOURCES.includes(resource as FhirResource)) {
-    return NextResponse.json(
-      { resourceType: "OperationOutcome", issue: [{ severity: "error", code: "not-supported", diagnostics: `Supported: ${FHIR_RESOURCES.join(", ")}` }] },
-      { status: 404 },
-    );
+    return outcome(404, "not-supported", `Supported: ${FHIR_RESOURCES.join(", ")}`);
   }
   const permission = FHIR_PERMISSION[resource as FhirResource];
   if (!ctx.permissions.includes(permission as never)) {
-    return NextResponse.json(
-      { resourceType: "OperationOutcome", issue: [{ severity: "error", code: "forbidden", diagnostics: `Requires ${permission}.` }] },
-      { status: 403 },
-    );
+    return outcome(403, "forbidden", `Requires ${permission}.`);
   }
 
   const url = new URL(request.url);
@@ -43,9 +56,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ reso
 
 export async function POST() {
   // Read-only export surface - writes are intentionally not supported.
-  return NextResponse.json(
-    { resourceType: "OperationOutcome", issue: [{ severity: "error", code: "not-supported", diagnostics: "FHIR export is read-only." }] },
-    { status: 405 },
-  );
+  return outcome(405, "not-supported", "FHIR export is read-only.");
 }
 export const dynamic = "force-dynamic";

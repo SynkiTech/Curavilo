@@ -50,11 +50,11 @@ export async function GET(request: Request) {
         db.facilityMembership.findMany({ where: { userId: target.id }, select: { facilityId: true } }),
         db.department.findMany({ where: { orgId: ctx.orgId, active: true }, orderBy: { name: "asc" } }),
         db.auditEvent.findMany({
-          where: { actorUserId: target.id, action: { in: ["staff.login", "staff.logout", "facility.exit", "staff.locked"] } },
+          where: { orgId: ctx.orgId, actorUserId: target.id, action: { in: ["staff.login", "staff.logout", "facility.exit", "staff.locked"] } },
           orderBy: { createdAt: "desc" }, take: 15,
         }),
         db.auditEvent.findMany({
-          where: { actorUserId: target.id },
+          where: { orgId: ctx.orgId, actorUserId: target.id },
           orderBy: { createdAt: "desc" }, take: 20,
         }),
         db.task.findMany({
@@ -152,7 +152,7 @@ const createSchema = z.object({
     z.object({ mode: z.literal("INVITE") }),
     z.object({ mode: z.literal("TEMP_PASSWORD"), tempPassword: z.string().min(1).max(100) }),
   ]),
-  photoData: z.string().max(400_000).optional().nullable(),
+  photoData: z.string().max(400_000).optional().nullable().refine((v) => !v || /^data:image\/(png|jpeg|jpg|webp);base64,/.test(v), "Photo must be a PNG, JPEG or WebP data URL"),
 });
 
 const patchSchema = z.discriminatedUnion("action", [
@@ -167,7 +167,7 @@ const patchSchema = z.discriminatedUnion("action", [
     employmentStatus: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "LOCUM"]).optional().nullable(),
     departmentId: z.string().max(30).optional().nullable(),
     serviceLine: z.string().max(40).optional().nullable(),
-    photoData: z.string().max(400_000).optional().nullable(),
+    photoData: z.string().max(400_000).optional().nullable().refine((v) => !v || /^data:image\/(png|jpeg|jpg|webp);base64,/.test(v), "Photo must be a PNG, JPEG or WebP data URL"),
     facilityIds: z.array(z.string().min(5)).min(1).max(20).optional(),
   }),
   z.object({
@@ -279,7 +279,7 @@ export async function POST(request: Request) {
     });
 
     // One-time secrets: never stored in plaintext, never shown again.
-    const sandbox = process.env.SANDBOX === "1" || process.env.NODE_ENV !== "production";
+    const sandbox = process.env.SANDBOX === "1" || process.env.NODE_ENV === "development";
     return ok({
       staff: { id: user.id, name: user.name, email: user.email, status: user.status },
       inviteLink: inviteToken && sandbox ? `/?invite=${inviteToken}` : null,
@@ -423,7 +423,7 @@ export async function PATCH(request: Request) {
           action: "staff.password_reset_by_owner", entityType: "User", entityId: target.id,
           summary: `Password reset by the owner for ${target.name}; a temporary password was issued (never logged).`,
         });
-        const sandbox = process.env.SANDBOX === "1" || process.env.NODE_ENV !== "production";
+        const sandbox = process.env.SANDBOX === "1" || process.env.NODE_ENV === "development";
         return ok({ ok: true, tempPassword: sandbox ? temp : null });
       }
 

@@ -1,5 +1,5 @@
 // Invoices API - list, create, detail, payments, void
-import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
+import { ok, fail, requireAuth, parseBody, parseQuery, Unauthorized } from "@/lib/api";
 import { z } from "zod";
 import { createInvoice, invoiceCreateSchema, listInvoices, getInvoice, recordPayment, paymentSchema, voidPayment, voidInvoice } from "@/modules/billing";
 
@@ -51,6 +51,9 @@ const actionSchema = z.discriminatedUnion("action", [
 
 export async function PATCH(request: Request) {
   try {
+    // Authenticate before touching the body: no unauthenticated parse surface.
+    const { getAuth } = await import("@/lib/auth");
+    if (!(await getAuth())) return fail(Unauthorized());
     const { searchParams } = new URL(request.url);
     const invoiceId = searchParams.get("id") ?? "";
     const body = await parseBody(request, actionSchema);

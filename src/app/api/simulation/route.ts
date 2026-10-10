@@ -1,6 +1,7 @@
 // Simulation API - scenario builder + run (spec §56–60, §138)
 import { z } from "zod";
 import { ok, fail, parseBody, requireAuth } from "@/lib/api";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { runScenarios, calibrateFromOperations, type SimulationParams } from "@/lib/simulation";
 
@@ -39,6 +40,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth("reports:read");
+    // Monte-Carlo simulation is CPU-bound: cap request rate per user (DoS resistance).
+    if (!rateLimit(`sim:${clientIp(request)}:${ctx.userId}`, 10, 10 * 60_000)) {
+      return ok({ error: "Too many simulations. Please wait a few minutes." }, 429);
+    }
     const body = await parseBody(request, z.object({
       action: z.enum(["RUN", "SAVE"]),
       baseline: paramsSchema,

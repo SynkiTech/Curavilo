@@ -34,7 +34,11 @@ export async function PATCH(request: Request) {
   try {
     const ctx = await requireAuth("encounters:write");
     const body = await parseBody(request, patchSchema);
-    const followUp = await db.followUp.findFirst({ where: { id: body.followUpId, orgId: ctx.orgId } });
+    // Facility isolation: non-admin staff may only close follow-ups of their own facility.
+    const spansOrg = ctx.role === "OWNER" || ctx.role === "ADMIN" || ctx.permissions.includes("org:manage");
+    const followUp = await db.followUp.findFirst({
+      where: { id: body.followUpId, orgId: ctx.orgId, ...(spansOrg ? {} : { facilityId: ctx.facilityId }) },
+    });
     if (!followUp) return ok({ error: "Follow-up not found." }, 404);
     const updated = await db.followUp.update({
       where: { id: followUp.id },

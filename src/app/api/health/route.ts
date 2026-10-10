@@ -1,4 +1,6 @@
-// Health probe - liveness + DB check + queue depth (runbooks, spec §142)
+// Health probe - liveness + DB check + queue depth (runbooks, spec §142).
+// Unauthenticated by design for load balancers, but it must never leak
+// infrastructure internals: state words only, details go to server logs.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -19,8 +21,9 @@ export async function GET() {
       time: new Date().toISOString(),
     });
   } catch (e) {
+    console.error("[health]", e);
     return NextResponse.json(
-      { status: "degraded", db: "error", error: e instanceof Error ? e.message : "unknown", time: new Date().toISOString() },
+      { status: "degraded", db: "error", time: new Date().toISOString() },
       { status: 503 },
     );
   }

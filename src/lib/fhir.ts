@@ -38,9 +38,13 @@ function ref(type: string, id: string): FhirObject {
 
 export async function mapResource(ctx: AuthContext, resource: FhirResource, take: number): Promise<FhirObject[]> {
   const orgId = ctx.orgId;
+  // Facility PHI isolation (security hardening): non-admin roles only ever
+  // export their active facility's data. OWNER/ADMIN span the organization.
+  const spansOrg = ctx.role === "OWNER" || ctx.role === "ADMIN" || ctx.permissions.includes("org:manage");
+  const facilityScope = spansOrg ? {} : { facilityId: ctx.facilityId };
   switch (resource) {
     case "Patient": {
-      const rows = await db.patient.findMany({ where: { orgId }, take, orderBy: { createdAt: "desc" } });
+      const rows = await db.patient.findMany({ where: { orgId, ...facilityScope }, take, orderBy: { createdAt: "desc" } });
       return rows.map((p): FhirObject => ({
         resourceType: "Patient",
         id: p.id,
@@ -53,7 +57,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
       }));
     }
     case "Practitioner": {
-      const rows = await db.staffMember.findMany({ where: { orgId }, take });
+      const rows = await db.staffMember.findMany({ where: { orgId, ...facilityScope }, take });
       return rows.map((s): FhirObject => ({
         resourceType: "Practitioner",
         id: s.id,
@@ -73,7 +77,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
       }));
     }
     case "Encounter": {
-      const rows = await db.encounter.findMany({ where: { orgId }, take, orderBy: { startedAt: "desc" }, include: { patient: true } });
+      const rows = await db.encounter.findMany({ where: { orgId, ...facilityScope }, take, orderBy: { startedAt: "desc" }, include: { patient: true } });
       return rows.map((e): FhirObject => ({
         resourceType: "Encounter",
         id: e.id,
@@ -85,7 +89,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
       }));
     }
     case "Appointment": {
-      const rows = await db.appointment.findMany({ where: { orgId }, take, orderBy: { scheduledAt: "desc" } });
+      const rows = await db.appointment.findMany({ where: { orgId, ...facilityScope }, take, orderBy: { scheduledAt: "desc" } });
       return rows.map((a): FhirObject => ({
         resourceType: "Appointment",
         id: a.id,
@@ -97,7 +101,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
     }
     case "Observation": {
       const rows = await db.diagnosticOrder.findMany({
-        where: { orgId, status: "RELEASED" }, take, orderBy: { releasedAt: "desc" },
+        where: { orgId, ...facilityScope, status: "RELEASED" }, take, orderBy: { releasedAt: "desc" },
       });
       const out: FhirObject[] = [];
       for (const order of rows) {
@@ -120,7 +124,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
       return out.slice(0, take);
     }
     case "DiagnosticReport": {
-      const rows = await db.diagnosticOrder.findMany({ where: { orgId, status: "RELEASED" }, take, orderBy: { releasedAt: "desc" } });
+      const rows = await db.diagnosticOrder.findMany({ where: { orgId, ...facilityScope, status: "RELEASED" }, take, orderBy: { releasedAt: "desc" } });
       return rows.map((o): FhirObject => ({
         resourceType: "DiagnosticReport",
         id: o.id,
@@ -134,7 +138,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
     }
     case "MedicationRequest": {
       const rows = await db.saleItem.findMany({
-        where: { orgId, sale: { status: "COMPLETED" } },
+        where: { orgId, sale: { status: "COMPLETED", ...(spansOrg ? {} : { facilityId: ctx.facilityId }) } },
         take,
         orderBy: { sale: { createdAt: "desc" } },
         include: { sale: { select: { createdAt: true, patientId: true } } },
@@ -152,7 +156,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
     }
     case "MedicationDispense": {
       const rows = await db.saleItem.findMany({
-        where: { orgId, sale: { status: "COMPLETED" } },
+        where: { orgId, sale: { status: "COMPLETED", ...(spansOrg ? {} : { facilityId: ctx.facilityId }) } },
         take,
         orderBy: { sale: { createdAt: "desc" } },
         include: { sale: { select: { createdAt: true, patientId: true } } },
@@ -168,7 +172,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
       }));
     }
     case "ServiceRequest": {
-      const rows = await db.diagnosticOrder.findMany({ where: { orgId }, take, orderBy: { orderedAt: "desc" } });
+      const rows = await db.diagnosticOrder.findMany({ where: { orgId, ...facilityScope }, take, orderBy: { orderedAt: "desc" } });
       return rows.map((o): FhirObject => ({
         resourceType: "ServiceRequest",
         id: o.id,
@@ -181,7 +185,7 @@ export async function mapResource(ctx: AuthContext, resource: FhirResource, take
       }));
     }
     case "Invoice": {
-      const rows = await db.invoice.findMany({ where: { orgId, voidedAt: null }, take, orderBy: { createdAt: "desc" } });
+      const rows = await db.invoice.findMany({ where: { orgId, ...facilityScope, voidedAt: null }, take, orderBy: { createdAt: "desc" } });
       return rows.map((inv): FhirObject => ({
         resourceType: "Invoice",
         id: inv.id,

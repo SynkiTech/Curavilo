@@ -1,9 +1,13 @@
 "use client";
 
 // Report export helpers: CSV serialization + download (reports stay deterministic).
+// csvEscape also neutralizes spreadsheet formula injection (OWASP): values
+// starting with = + - @ tab or CR get a leading apostrophe so Excel/Sheets
+// treat them as text instead of executing formulas.
 export function csvEscape(value: unknown): string {
   const s = String(value ?? "");
-  return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  const guarded = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\n\r]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded;
 }
 
 export function toCsv(rows: unknown[][]): string {

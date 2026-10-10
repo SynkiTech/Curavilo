@@ -8,7 +8,7 @@ import { ok, fail, parseBody, AppError } from "@/lib/api";
 import {
   createSession, createGateSession, destroySession, destroyGateSession, destroyUserSessions,
   getAuth, getGate, verifyPassword, hashPassword, passwordPolicyError, setActiveFacility,
-  accessibleFacilityIds,
+  accessibleFacilityIds, pruneExpiredSessions,
 } from "@/lib/auth";
 import { canAuthenticate } from "@/lib/rbac";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
@@ -30,6 +30,9 @@ function tokenHash(token: string): string {
 function findToken(token: string, kind: string) {
   return db.passwordToken.findFirst({ where: { tokenHash: tokenHash(token), kind } });
 }
+
+const GATE_LOCK_THRESHOLD = 8;
+const GATE_LOCK_MINUTES = 15;
 
 export async function GET() {
   try {
@@ -119,6 +122,10 @@ export async function POST(request: Request) {
     const ip = clientIp(request);
 
     if (body.action === "register") {
+      // Unlimited org creation is an abuse vector (spam + SQLite bloat).
+      if (!rateLimit(`register:${ip}`, 5, 60 * 60_000)) {
+        throw new AppError(429, "rate_limited", "Too many registrations from this network. Please try again later.");
+      }
       const input = registerSchema.parse(body);
       const result = await registerOrganization(input);
       await createGateSession(result.orgId);
@@ -134,10 +141,38 @@ export async function POST(request: Request) {
         throw new AppError(429, "rate_limited", "Too many attempts. Please wait a few minutes and try again.");
       }
       const credential = await db.facilityCredential.findUnique({ where: { email: input.email.toLowerCase() } });
+      // Server-side lockout so the in-memory limiter cannot be sidestepped by
+      // rotating spoofable headers or restarting the process.
+      const orgState = credential
+        ? await db.organization.findUnique({ where: { id: credential.orgId }, select: { id: true, gateFailedCount: true, gateLockedUntil: true } })
+        : null;
+      if (orgState?.gateLockedUntil && orgState.gateLockedUntil > new Date()) {
+        throw new AppError(423, "account_locked", "Facility access is temporarily locked after repeated failed attempts. Try again later.");
+      }
       if (!credential || !verifyPassword(input.password, credential.passwordHash)) {
+        if (orgState) {
+          const failed = orgState.gateFailedCount + 1;
+          await db.organization.update({
+            where: { id: orgState.id },
+            data: {
+              gateFailedCount: failed >= GATE_LOCK_THRESHOLD ? 0 : failed,
+              gateLockedUntil: failed >= GATE_LOCK_THRESHOLD ? new Date(Date.now() + GATE_LOCK_MINUTES * 60_000) : orgState.gateLockedUntil,
+            },
+          });
+          if (failed >= GATE_LOCK_THRESHOLD) {
+            await audit({
+              orgId: orgState.id, action: "facility.gate_locked", entityType: "Organization", entityId: orgState.id,
+              summary: `Facility access gate locked for ${GATE_LOCK_MINUTES} minutes after repeated failed attempts.`,
+            });
+          }
+        }
         throw new AppError(401, "invalid_credentials", "Invalid facility email or password.");
       }
+      if (orgState && (orgState.gateFailedCount > 0 || orgState.gateLockedUntil)) {
+        await db.organization.update({ where: { id: orgState.id }, data: { gateFailedCount: 0, gateLockedUntil: null } });
+      }
       await createGateSession(credential.orgId);
+      void pruneExpiredSessions(); // opportunistic housekeeping (fire-and-forget)
       const org = await db.organization.findUnique({ where: { id: credential.orgId } });
       const facility = await db.facility.findFirst({ where: { orgId: credential.orgId }, orderBy: { createdAt: "asc" } });
       await audit({
@@ -302,9 +337,11 @@ export async function POST(request: Request) {
         action: "staff.password_reset_requested", entityType: "User", entityId: user.id,
         summary: "Password reset requested (single-use token issued).",
       });
-      // Sandbox has no SMTP: hand back the link once, like the comms console
-      // simulation. Production sends this by email and returns nothing (ADR 0011 §6).
-      if (process.env.SANDBOX === "1" || process.env.NODE_ENV !== "production") {
+      // Sandbox/dev has no SMTP: hand back the link once, like the comms console
+      // simulation. Strictly gated to explicit sandbox/dev modes so a staging
+      // deploy (NODE_ENV=production) can never leak account-takeover links
+      // (ADR 0011 §6; security-exceptions.md). Production returns nothing.
+      if (process.env.SANDBOX === "1" || process.env.NODE_ENV === "development") {
         return ok({ ...generic, resetLink: `/?reset=${token}` });
       }
       return ok(generic);

@@ -1,6 +1,7 @@
 // Reports API - revenue, patient volume, pharmacy sales, inventory, expenses,
 // people (permission-filtered per report type).
 import { ok, fail, requireAuth, parseQuery } from "@/lib/api";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { z } from "zod";
 import {
   revenueReport, patientVolumeReport, pharmacySalesReport,
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
   try {
     const q = parseQuery(request, query);
     const ctx = await requireAuth(PERMISSION[q.type]);
+    // Report generation runs DB-heavy aggregations: rate limited per user.
+    if (!rateLimit(`report:${clientIp(request)}:${ctx.userId}`, 30, 10 * 60_000)) {
+      return ok({ error: "Too many report requests. Please wait a few minutes." }, 429);
+    }
 
     // Point-in-time reports ignore the date range; ledger reports need it.
     if (q.type === "inventory") return ok(await inventoryReport(ctx));

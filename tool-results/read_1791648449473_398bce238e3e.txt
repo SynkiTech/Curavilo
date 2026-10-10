@@ -1,0 +1,570 @@
+     1→// Staff management module - personnel accounts, invitations, lifecycle,
+     2→// permission overrides and custom roles (spec §6-8, §24-25, §37-39; ADR 0011).
+     3→import { z } from "zod";
+     4→import { db } from "@/lib/db";
+     5→import { AppError, BadRequest, NotFound, Forbidden } from "@/lib/api";
+     6→import { hashPassword, hashToken, generateTempPassword, passwordPolicyError } from "@/lib/auth";
+     7→import { audit } from "@/lib/audit";
+     8→import {
+     9→  PERMISSIONS, PROTECTED_PERMISSIONS, ROLES, STAFF_STATUSES,
+    10→  permissionsForRole, isBuiltInRole,
+    11→} from "@/lib/rbac";
+    12→import { randomBytes } from "crypto";
+    13→
+    14→export const DASH_ROLES = [...ROLES] as readonly string[];
+    15→
+    16→export const createStaffSchema = z.object({
+    17→  firstName: z.string().min(1).max(60),
+    18→  lastName: z.string().min(1).max(60),
+    19→  email: z.string().email().max(120),
+    20→  phone: z.string().max(30).optional().nullable().or(z.literal("")),
+    21→  staffNo: z.string().max(30).optional().nullable().or(z.literal("")),
+    22→  photoData: z.string().max(400_000).optional().nullable().or(z.literal("")),
+    23→  role: z.string().min(2).max(60),
+    24→  designation: z.string().min(2).max(40),
+    25→  department: z.string().max(60).optional().nullable().or(z.literal("")),
+    26→  serviceLine: z.string().max(60).optional().nullable().or(z.literal("")),
+    27→  employmentStatus: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "LOCUM"]).default("FULL_TIME"),
+    28→  accessMode: z.enum(["INVITE", "TEMP_PASSWORD"]).default("INVITE"),
+    29→  tempPassword: z.string().min(8).max(100).optional(),
+    30→});
+    31→
+    32→export const updateStaffSchema = z.object({
+    33→  firstName: z.string().min(1).max(60).optional(),
+    34→  lastName: z.string().min(1).max(60).optional(),
+    35→  phone: z.string().max(30).optional().nullable(),
+    36→  staffNo: z.string().max(30).optional().nullable(),
+    37→  photoData: z.string().max(400_000).optional().nullable(),
+    38→  role: z.string().min(2).max(60).optional(),
+    39→  designation: z.string().min(2).max(40).optional(),
+    40→  department: z.string().max(60).optional().nullable(),
+    41→  serviceLine: z.string().max(60).optional().nullable(),
+    42→  employmentStatus: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "LOCUM"]).optional(),
+    43→});
+    44→
+    45→export const staffActionSchema = z.object({
+    46→  action: z.enum([
+    47→    "deactivate", "reactivate", "suspend", "reinstate", "lock", "unlock", "terminate",
+    48→    "issue_temp_password", "send_invitation", "set_override", "clear_override",
+    49→  ]),
+    50→  reason: z.string().max(200).optional(),
+    51→  tempPassword: z.string().min(8).max(100).optional(),
+    52→  permission: z.string().max(40).optional(),
+    53→  effect: z.enum(["GRANT", "DENY"]).optional(),
+    54→});
+    55→
+    56→function displayName(first: string, last: string): string {
+    57→  return `${first.trim()} ${last.trim()}`.replace(/\s+/g, " ").slice(0, 80);
+    58→}
+    59→
+    60→/** Role preview for the staff creation form (spec §39): understandable can/cannot lists. */
+    61→export async function rolePreview(orgId: string, role: string) {
+    62→  let perms: string[];
+    63→  if (isBuiltInRole(role)) {
+    64→    perms = permissionsForRole(role);
+    65→  } else {
+    66→    const custom = await db.customRole.findFirst({ where: { orgId, name: role } });
+    67→    perms = custom ? JSON.parse(custom.permissions) as string[] : [];
+    68→  }
+    69→  const moduleOf: Record<string, string> = {
+    70→    "patients:read": "Patients", "patients:write": "Patient registration",
+    71→    "appointments:read": "Appointments", "appointments:write": "Appointment scheduling",
+    72→    "queue:operate": "Queue management", "encounters:read": "Clinical encounters",
+    73→    "encounters:write": "Encounter documentation", "billing:read": "Billing overview",
+    74→    "billing:write": "Billing administration", "payments:record": "Record payments",
+    75→    "payments:void": "Refunds and payment voiding", "inventory:read": "Inventory",
+    76→    "inventory:write": "Inventory administration", "pos:sell": "POS / Pharmacy sales",
+    77→    "reports:read": "Reports", "reports:export": "Report export and download",
+    78→    "ai:ask": "AI assistant", "ai:act": "AI confirmed actions",
+    79→    "audit:read": "Audit log", "staff:read": "Staff directory", "staff:manage": "Staff administration",
+    80→    "settings:manage": "Facility settings", "roles:manage": "Role management",
+    81→    "workflows:manage": "Workflow automation", "lab:operate": "Lab and radiology",
+    82→    "inpatient:manage": "Wards and admissions", "portals:manage": "Patient portals",
+    83→    "data:manage": "Data import/export",
+    84→  };
+    85→  const granted = perms
+    86→    .filter((p) => (PERMISSIONS as readonly string[]).includes(p))
+    87→    .map((p) => moduleOf[p] ?? p)
+    88→    .sort();
+    89→  const denied = (Object.keys(moduleOf) as string[])
+    90→    .filter((p) => !perms.includes(p))
+    91→    .map((p) => moduleOf[p])
+    92→    .sort();
+    93→  return { role, granted, denied };
+    94→}
+    95→
+    96→async function resolveStaffRole(orgId: string, role: string): Promise<void> {
+    97→  if (isBuiltInRole(role)) return;
+    98→  const custom = await db.customRole.findFirst({ where: { orgId, name: role } });
+    99→  if (!custom) throw BadRequest(`Unknown role "${role}".`);
+   100→}
+   101→
+   102→// ─── Staff CRUD ─────────────────────────────────────────────────────────────
+   103→
+   104→export async function listStaff(
+   105→  orgId: string,
+   106→  facilityId: string,
+   107→  filters: { q?: string; role?: string; department?: string; status?: string }
+   108→) {
+   109→  const where: Record<string, unknown> = { orgId, facilityId };
+   110→  if (filters.q) {
+   111→    where.OR = [
+   112→      { name: { contains: filters.q } },
+   113→      { email: { contains: filters.q } },
+   114→      { staffNo: { contains: filters.q } },
+   115→    ];
+   116→  }
+   117→  if (filters.role) where.role = filters.role;
+   118→  if (filters.department) where.department = filters.department;
+   119→  if (filters.status) where.status = filters.status;
+   120→  return db.staffMember.findMany({
+   121→    where,
+   122→    orderBy: [{ active: "desc" }, { name: "asc" }],
+   123→    select: {
+   124→      id: true, userId: true, name: true, firstName: true, lastName: true,
+   125→      email: true, phone: true, staffNo: true, photoData: true,
+   126→      designation: true, role: true, department: true, serviceLine: true,
+   127→      employmentStatus: true, status: true, active: true,
+   128→      invitedAt: true, activatedAt: true, deactivatedAt: true, createdAt: true,
+   129→    },
+   130→  });
+   131→}
+   132→
+   133→export async function createStaff(
+   134→  ctx: { orgId: string; facilityId: string; userId: string; userName: string },
+   135→  input: z.infer<typeof createStaffSchema>
+   136→) {
+   137→  const email = input.email.toLowerCase();
+   138→  await resolveStaffRole(ctx.orgId, input.role);
+   139→
+   140→  const existingStaff = await db.staffMember.findFirst({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, email } });
+   141→  if (existingStaff) throw new AppError(409, "staff_exists", "A staff member with this email already exists at this facility.");
+   142→
+   143→  const name = displayName(input.firstName, input.lastName);
+   144→  let tempPasswordIssued: string | null = null;
+   145→  let invitationToken: string | null = null;
+   146→
+   147→  const staff = await db.$transaction(async (tx) => {
+   148→    let userId: string | null = null;
+   149→    const existingUser = await tx.user.findUnique({ where: { email } });
+   150→
+   151→    if (input.accessMode === "TEMP_PASSWORD") {
+   152→      if (input.tempPassword) {
+   153→        const policy = passwordPolicyError(input.tempPassword);
+   154→        if (policy) throw new AppError(400, "weak_password", policy);
+   155→      }
+   156→      const temp = input.tempPassword ?? generateTempPassword();
+   157→      if (existingUser) {
+   158→        // Account already exists (cross-facility staff): link it, no password reset
+   159→        // through this path - use the password reset flow for account recovery.
+   160→        userId = existingUser.id;
+   161→      } else {
+   162→        const user = await tx.user.create({
+   163→          data: { email, name, passwordHash: hashPassword(temp), mustChangePassword: true },
+   164→        });
+   165→        userId = user.id;
+   166→        tempPasswordIssued = temp; // surfaced ONCE to the owner for handover; never logged or stored in plaintext
+   167→      }
+   168→      const dup = await tx.membership.findFirst({ where: { userId: userId!, orgId: ctx.orgId } });
+   169→      if (!dup) {
+   170→        await tx.membership.create({ data: { userId: userId!, orgId: ctx.orgId, role: input.role } });
+   171→      }
+   172→    }
+   173→
+   174→    const staff = await tx.staffMember.create({
+   175→      data: {
+   176→        orgId: ctx.orgId, facilityId: ctx.facilityId, userId,
+   177→        name, firstName: input.firstName.trim(), lastName: input.lastName.trim(),
+   178→        email, phone: input.phone || null, staffNo: input.staffNo || null,
+   179→        photoData: input.photoData || null,
+   180→        designation: input.designation, role: input.role,
+   181→        department: input.department || null, serviceLine: input.serviceLine || null,
+   182→        employmentStatus: input.employmentStatus,
+   183→        status: input.accessMode === "INVITE" ? "INVITED" : "ACTIVE",
+   184→        invitedAt: input.accessMode === "INVITE" ? new Date() : null,
+   185→        activatedAt: input.accessMode === "TEMP_PASSWORD" ? new Date() : null,
+   186→        active: input.accessMode === "TEMP_PASSWORD",
+   187→      },
+   188→    });
+   189→
+   190→    if (input.accessMode === "INVITE") {
+   191→      const token = randomBytes(24).toString("hex");
+   192→      await tx.passwordResetToken.create({
+   193→        data: {
+   194→          orgId: ctx.orgId, facilityId: ctx.facilityId, staffId: staff.id, userId: null,
+   195→          kind: "INVITE", tokenHash: hashToken(token),
+   196→          expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+   197→          createdById: ctx.userId,
+   198→        },
+   199→      });
+   200→      invitationToken = token;
+   201→      await tx.communicationMessage.create({
+   202→        data: {
+   203→          orgId: ctx.orgId, facilityId: ctx.facilityId, channel: "EMAIL",
+   204→          type: "STAFF_INVITATION", recipient: email,
+   205→          subject: `You have been invited to join ${name ? "the team" : "Curavilo"}`,
+   206→          bodyPreview: `Accept your Curavilo staff invitation and set your own password using this single-use code: ${token}`,
+   207→          status: "SIMULATED", provider: "console", source: "MANUAL", sourceId: staff.id,
+   208→        },
+   209→      }).catch(() => undefined);
+   210→    }
+   211→
+   212→    await tx.auditEvent.create({
+   213→      data: {
+   214→        orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   215→        action: input.accessMode === "INVITE" ? "staff.invitation_created" : "staff.created",
+   216→        entityType: "StaffMember", entityId: staff.id,
+   217→        summary: `${name} added as ${input.role} (${input.accessMode === "INVITE" ? "invitation sent" : "temporary password issued"}).`,
+   218→      },
+   219→    });
+   220→
+   221→    return staff;
+   222→  });
+   223→
+   224→  return {
+   225→    staff,
+   226→    tempPassword: tempPasswordIssued,
+   227→    invitationToken,
+   228→    inviteUrl: invitationToken ? `/staff/accept?token=${invitationToken}` : null,
+   229→  };
+   230→}
+   231→
+   232→export async function getStaffDetail(orgId: string, facilityId: string, staffId: string) {
+   233→  const staff = await db.staffMember.findFirst({ where: { id: staffId, orgId, facilityId } });
+   234→  if (!staff) throw NotFound("Staff member not found.");
+   235→  const user = staff.userId ? await db.user.findUnique({ where: { id: staff.userId }, include: { overrides: true } }) : null;
+   236→  const activity = await db.auditEvent.findMany({
+   237→    where: staff.userId ? { orgId, OR: [{ entityId: staff.id, entityType: "StaffMember" }, { actorUserId: staff.userId }] } : { orgId, entityId: staff.id },
+   238→    orderBy: { createdAt: "desc" },
+   239→    take: 25,
+   240→    select: { id: true, action: true, summary: true, createdAt: true, actorLabel: true },
+   241→  });
+   242→  const recentLogins = user?.lastLoginAt ? [user.lastLoginAt] : [];
+   243→  return {
+   244→    staff: {
+   245→      id: staff.id, userId: staff.userId, name: staff.name, firstName: staff.firstName,
+   246→      lastName: staff.lastName, email: staff.email, phone: staff.phone, staffNo: staff.staffNo,
+   247→      photoData: staff.photoData, designation: staff.designation, role: staff.role,
+   248→      department: staff.department, serviceLine: staff.serviceLine,
+   249→      employmentStatus: staff.employmentStatus, status: staff.status, active: staff.active,
+   250→      invitedAt: staff.invitedAt, activatedAt: staff.activatedAt, deactivatedAt: staff.deactivatedAt,
+   251→      createdAt: staff.createdAt,
+   252→    },
+   253→    account: user ? {
+   254→      email: user.email, lastLoginAt: user.lastLoginAt, mustChangePassword: user.mustChangePassword,
+   255→      lockedUntil: user.lockedUntil,
+   256→      overrides: user.overrides.filter((o) => o.orgId === orgId).map((o) => ({ permission: o.permission, effect: o.effect })),
+   257→    } : null,
+   258→    permissions: staff.role ? permissionsForRole(staff.role) : [],
+   259→    activity,
+   260→    recentLogins,
+   261→  };
+   262→}
+   263→
+   264→export async function updateStaff(
+   265→  ctx: { orgId: string; facilityId: string; userId: string; userName: string },
+   266→  staffId: string,
+   267→  input: z.infer<typeof updateStaffSchema>
+   268→) {
+   269→  const staff = await db.staffMember.findFirst({ where: { id: staffId, orgId: ctx.orgId, facilityId: ctx.facilityId } });
+   270→  if (!staff) throw NotFound("Staff member not found.");
+   271→  if (input.role) await resolveStaffRole(ctx.orgId, input.role);
+   272→
+   273→  const data: Record<string, unknown> = {};
+   274→  if (input.firstName || input.lastName) {
+   275→    const first = input.firstName ?? staff.firstName ?? "";
+   276→    const last = input.lastName ?? staff.lastName ?? "";
+   277→    data.firstName = first.trim();
+   278→    data.lastName = last.trim();
+   279→    data.name = displayName(first || "Staff", last || "Member");
+   280→  }
+   281→  for (const k of ["phone", "staffNo", "photoData", "designation", "department", "serviceLine", "employmentStatus"] as const) {
+   282→    if (input[k] !== undefined) data[k] = input[k] || null;
+   283→  }
+   284→  const roleChanged = !!(input.role && input.role !== staff.role);
+   285→  if (input.role) data.role = input.role;
+   286→
+   287→  const updated = await db.$transaction(async (tx) => {
+   288→    const s = await tx.staffMember.update({ where: { id: staff.id }, data });
+   289→    if (roleChanged && s.userId) {
+   290→      await tx.membership.updateMany({
+   291→        where: { userId: s.userId, orgId: ctx.orgId },
+   292→        data: { role: input.role! },
+   293→      });
+   294→      // Role changes revoke existing sessions so new permissions take effect cleanly.
+   295→      await tx.session.deleteMany({ where: { userId: s.userId } });
+   296→    }
+   297→    await tx.auditEvent.create({
+   298→      data: {
+   299→        orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   300→        action: roleChanged ? "staff.role_changed" : "staff.updated",
+   301→        entityType: "StaffMember", entityId: staff.id,
+   302→        summary: roleChanged
+   303→          ? `${staff.name} role changed from ${staff.role ?? "?"} to ${input.role}.`
+   304→          : `${staff.name} profile updated.`,
+   305→      },
+   306→    });
+   307→    return s;
+   308→  });
+   309→  return updated;
+   310→}
+   311→
+   312→async function transitionStatus(
+   313→  ctx: { orgId: string; facilityId: string; userId: string; userName: string },
+   314→  staffId: string,
+   315→  newStatus: string,
+   316→  summaryDetail: string,
+   317→  opts: { revokeSessions?: boolean; setActive?: boolean } = {}
+   318→) {
+   319→  const staff = await db.staffMember.findFirst({ where: { id: staffId, orgId: ctx.orgId, facilityId: ctx.facilityId } });
+   320→  if (!staff) throw NotFound("Staff member not found.");
+   321→  if (!STAFF_STATUSES.includes(newStatus as never)) throw BadRequest("Invalid status.");
+   322→  const data: Record<string, unknown> = { status: newStatus };
+   323→  if (newStatus === "ACTIVE") { data.activatedAt = new Date(); data.active = true; }
+   324→  if (["INACTIVE", "SUSPENDED", "TERMINATED"].includes(newStatus)) { data.deactivatedAt = new Date(); data.active = false; }
+   325→  if (newStatus === "LOCKED") data.active = false;
+   326→
+   327→  await db.$transaction(async (tx) => {
+   328→    await tx.staffMember.update({ where: { id: staff.id }, data });
+   329→    if (opts.revokeSessions && staff.userId) {
+   330→      // Deactivated personnel must not ride an old session (spec §57, §76):
+   331→      // DB-backed sessions are deleted server-side, killing every device.
+   332→      await tx.session.deleteMany({ where: { userId: staff.userId } });
+   333→    }
+   334→    await tx.auditEvent.create({
+   335→      data: {
+   336→        orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   337→        action: "staff.status_changed", entityType: "StaffMember", entityId: staff.id,
+   338→        summary: `${staff.name} -> ${newStatus}${summaryDetail ? ` (${summaryDetail})` : ""}.`,
+   339→        metadata: opts.revokeSessions ? JSON.stringify({ sessionsRevoked: true }) : null,
+   340→      },
+   341→    });
+   342→  });
+   343→  return db.staffMember.findUnique({ where: { id: staff.id } });
+   344→}
+   345→
+   346→export async function staffAction(
+   347→  ctx: { orgId: string; facilityId: string; userId: string; userName: string },
+   348→  staffId: string,
+   349→  input: z.infer<typeof staffActionSchema>
+   350→) {
+   351→  const staff = await db.staffMember.findFirst({ where: { id: staffId, orgId: ctx.orgId, facilityId: ctx.facilityId } });
+   352→  if (!staff) throw NotFound("Staff member not found.");
+   353→
+   354→  switch (input.action) {
+   355→    case "deactivate":
+   356→      return transitionStatus(ctx, staffId, "INACTIVE", input.reason ?? "", { revokeSessions: true });
+   357→    case "reactivate":
+   358→      return transitionStatus(ctx, staffId, "ACTIVE", input.reason ?? "");
+   359→    case "suspend":
+   360→      return transitionStatus(ctx, staffId, "SUSPENDED", input.reason ?? "", { revokeSessions: true });
+   361→    case "reinstate":
+   362→      return transitionStatus(ctx, staffId, "ACTIVE", input.reason ?? "");
+   363→    case "terminate":
+   364→      return transitionStatus(ctx, staffId, "TERMINATED", input.reason ?? "", { revokeSessions: true });
+   365→    case "lock":
+   366→      return transitionStatus(ctx, staffId, "LOCKED", input.reason ?? "", { revokeSessions: true });
+   367→    case "unlock": {
+   368→      if (staff.userId) {
+   369→        await db.user.update({ where: { id: staff.userId }, data: { failedCount: 0, lockedUntil: null } });
+   370→      }
+   371→      await db.staffMember.update({ where: { id: staff.id }, data: { status: "ACTIVE", active: true } });
+   372→      await audit({
+   373→        orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   374→        action: "staff.status_changed", entityType: "StaffMember", entityId: staff.id,
+   375→        summary: `${staff.name} unlocked and reinstated to ACTIVE.`,
+   376→      });
+   377→      return db.staffMember.findUnique({ where: { id: staff.id } });
+   378→    }
+   379→    case "issue_temp_password": {
+   380→      if (!staff.userId) throw BadRequest("This staff member has no account yet; send an invitation first.");
+   381→      const temp = input.tempPassword ?? generateTempPassword();
+   382→      const policy = passwordPolicyError(temp);
+   383→      if (policy) throw new AppError(400, "weak_password", policy);
+   384→      await db.$transaction([
+   385→        db.user.update({
+   386→          where: { id: staff.userId },
+   387→          data: { passwordHash: hashPassword(temp), mustChangePassword: true, failedCount: 0, lockedUntil: null },
+   388→        }),
+   389→        db.session.deleteMany({ where: { userId: staff.userId } }),
+   390→        db.auditEvent.create({
+   391→          data: {
+   392→            orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   393→            action: "staff.temp_password_issued", entityType: "StaffMember", entityId: staff.id,
+   394→            summary: `Temporary password issued for ${staff.name}; change forced at next login.`,
+   395→          },
+   396→        }),
+   397→      ]);
+   398→      return { ok: true, tempPassword: temp };
+   399→    }
+   400→    case "send_invitation": {
+   401→      const token = randomBytes(24).toString("hex");
+   402→      await db.$transaction(async (tx) => {
+   403→        await tx.passwordResetToken.create({
+   404→          data: {
+   405→            orgId: ctx.orgId, facilityId: ctx.facilityId, staffId: staff.id, userId: null,
+   406→            kind: "INVITE", tokenHash: hashToken(token),
+   407→            expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+   408→            createdById: ctx.userId,
+   409→          },
+   410→        });
+   411→        await tx.staffMember.update({ where: { id: staff.id }, data: { status: "INVITED", invitedAt: new Date() } });
+   412→        await tx.communicationMessage.create({
+   413→          data: {
+   414→            orgId: ctx.orgId, facilityId: ctx.facilityId, channel: "EMAIL",
+   415→            type: "STAFF_INVITATION", recipient: staff.email ?? "",
+   416→            subject: "Your Curavilo staff invitation",
+   417→            bodyPreview: `Set your Curavilo password with this single-use invitation code: ${token}`,
+   418→            status: "SIMULATED", provider: "console", source: "MANUAL", sourceId: staff.id,
+   419→          },
+   420→        }).catch(() => undefined);
+   421→        await tx.auditEvent.create({
+   422→          data: {
+   423→            orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   424→            action: "staff.invitation_created", entityType: "StaffMember", entityId: staff.id,
+   425→            summary: `Invitation re-sent to ${staff.email}.`,
+   426→          },
+   427→        });
+   428→      });
+   429→      return { ok: true, invitationToken: token, inviteUrl: `/staff/accept?token=${token}` };
+   430→    }
+   431→    case "set_override": {
+   432→      if (!input.permission || !input.effect) throw BadRequest("permission and effect are required.");
+   433→      if (!(PERMISSIONS as readonly string[]).includes(input.permission)) throw BadRequest("Unknown permission.");
+   434→      if (PROTECTED_PERMISSIONS.includes(input.permission as never)) {
+   435→        throw Forbidden("This permission is platform-protected and cannot be overridden.");
+   436→      }
+   437→      if (!staff.userId) throw BadRequest("This staff member has no account yet.");
+   438→      await db.permissionOverride.upsert({
+   439→        where: { userId_orgId_permission: { userId: staff.userId, orgId: ctx.orgId, permission: input.permission } },
+   440→        create: { userId: staff.userId, orgId: ctx.orgId, permission: input.permission, effect: input.effect },
+   441→        update: { effect: input.effect },
+   442→      });
+   443→      if (staff.userId) await db.session.deleteMany({ where: { userId: staff.userId } }); // re-resolve on next login
+   444→      await audit({
+   445→        orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   446→        action: "staff.permission_changed", entityType: "StaffMember", entityId: staff.id,
+   447→        summary: `Permission override ${input.effect} ${input.permission} for ${staff.name}.`,
+   448→      });
+   449→      return { ok: true };
+   450→    }
+   451→    case "clear_override": {
+   452→      if (!input.permission) throw BadRequest("permission is required.");
+   453→      if (!staff.userId) throw BadRequest("This staff member has no account yet.");
+   454→      await db.permissionOverride.deleteMany({
+   455→        where: { userId: staff.userId, orgId: ctx.orgId, permission: input.permission },
+   456→      });
+   457→      await db.session.deleteMany({ where: { userId: staff.userId } });
+   458→      await audit({
+   459→        orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   460→        action: "staff.permission_changed", entityType: "StaffMember", entityId: staff.id,
+   461→        summary: `Permission override cleared (${input.permission}) for ${staff.name}.`,
+   462→      });
+   463→      return { ok: true };
+   464→    }
+   465→  }
+   466→}
+   467→
+   468→// ─── Custom roles (spec §25) ────────────────────────────────────────────────
+   469→
+   470→export const customRoleSchema = z.object({
+   471→  name: z.string().min(2).max(60),
+   472→  description: z.string().max(200).optional().nullable(),
+   473→  permissions: z.array(z.string()).max(PERMISSIONS.length),
+   474→});
+   475→
+   476→export function validateCustomRolePermissions(permissions: string[]): string[] {
+   477→  const valid: string[] = [];
+   478→  for (const p of permissions) {
+   479→    if (!(PERMISSIONS as readonly string[]).includes(p)) continue;
+   480→    if (PROTECTED_PERMISSIONS.includes(p as never)) continue; // silently drop protected
+   481→    if (!valid.includes(p)) valid.push(p);
+   482→  }
+   483→  return valid;
+   484→}
+   485→
+   486→export async function listRoles(orgId: string) {
+   487→  const customs = await db.customRole.findMany({ where: { orgId }, orderBy: { name: "asc" } });
+   488→  const builtIn = ROLES.map((r) => ({
+   489→    name: r, builtIn: true as const, description: null,
+   490→    permissions: permissionsForRole(r), systemProtected: r === "OWNER",
+   491→  }));
+   492→  const custom = customs.map((c) => ({
+   493→    name: c.name, builtIn: false as const, description: c.description,
+   494→    permissions: (() => { try { return JSON.parse(c.permissions) as string[]; } catch { return []; } })(),
+   495→    systemProtected: false,
+   496→  }));
+   497→  return { builtIn, custom, allPermissions: PERMISSIONS, protectedPermissions: PROTECTED_PERMISSIONS };
+   498→}
+   499→
+   500→export async function createCustomRole(
+   501→  ctx: { orgId: string; userId: string; userName: string },
+   502→  input: z.infer<typeof customRoleSchema>
+   503→) {
+   504→  const name = input.name.trim();
+   505→  if ((ROLES as readonly string[]).includes(name)) throw BadRequest("This name is reserved for built-in roles.");
+   506→  const dup = await db.customRole.findFirst({ where: { orgId: ctx.orgId, name } });
+   507→  if (dup) throw new AppError(409, "role_exists", "A role with this name already exists.");
+   508→  const permissions = validateCustomRolePermissions(input.permissions);
+   509→  const role = await db.customRole.create({
+   510→    data: {
+   511→      orgId: ctx.orgId, name,
+   512→      description: input.description || null,
+   513→      permissions: JSON.stringify(permissions),
+   514→      createdById: ctx.userId,
+   515→    },
+   516→  });
+   517→  await audit({
+   518→    orgId: ctx.orgId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   519→    action: "roles.created", entityType: "CustomRole", entityId: role.id,
+   520→    summary: `Custom role "${name}" created with ${permissions.length} permissions.`,
+   521→  });
+   522→  return role;
+   523→}
+   524→
+   525→export async function updateCustomRole(
+   526→  ctx: { orgId: string; userId: string; userName: string },
+   527→  name: string,
+   528→  input: z.infer<typeof customRoleSchema>
+   529→) {
+   530→  const existing = await db.customRole.findFirst({ where: { orgId: ctx.orgId, name } });
+   531→  if (!existing) throw NotFound("Custom role not found.");
+   532→  const permissions = validateCustomRolePermissions(input.permissions);
+   533→  const updated = await db.customRole.update({
+   534→    where: { id: existing.id },
+   535→    data: {
+   536→      description: input.description || null,
+   537→      permissions: JSON.stringify(permissions),
+   538→    },
+   539→  });
+   540→  // Force re-resolution: users of this role get updated permissions on next login.
+   541→  const users = await db.membership.findMany({ where: { orgId: ctx.orgId, role: name }, select: { userId: true } });
+   542→  for (const u of users) await db.session.deleteMany({ where: { userId: u.userId } });
+   543→  await audit({
+   544→    orgId: ctx.orgId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   545→    action: "roles.updated", entityType: "CustomRole", entityId: existing.id,
+   546→    summary: `Custom role "${name}" updated (${permissions.length} permissions; sessions re-resolved).`,
+   547→  });
+   548→  return updated;
+   549→}
+   550→
+   551→export async function deleteCustomRole(
+   552→  ctx: { orgId: string; userId: string; userName: string },
+   553→  name: string
+   554→) {
+   555→  const existing = await db.customRole.findFirst({ where: { orgId: ctx.orgId, name } });
+   556→  if (!existing) throw NotFound("Custom role not found.");
+   557→  const inUse = await db.membership.count({ where: { orgId: ctx.orgId, role: name } });
+   558→  const staffUsing = await db.staffMember.count({ where: { orgId: ctx.orgId, role: name } });
+   559→  if (inUse > 0 || staffUsing > 0) {
+   560→    throw BadRequest(`Cannot delete: ${inUse + staffUsing} staff member(s) still hold this role.`);
+   561→  }
+   562→  await db.customRole.delete({ where: { id: existing.id } });
+   563→  await audit({
+   564→    orgId: ctx.orgId, actorUserId: ctx.userId, actorLabel: ctx.userName,
+   565→    action: "roles.deleted", entityType: "CustomRole", entityId: existing.id,
+   566→    summary: `Custom role "${name}" deleted.`,
+   567→  });
+   568→  return { ok: true };
+   569→}
+   570→

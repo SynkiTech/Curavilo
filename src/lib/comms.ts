@@ -43,7 +43,9 @@ class ConsoleAdapter implements MessageAdapter {
   readonly provider = "console";
   constructor(private readonly prefix: string) {}
   async send(msg: OutgoingMessage): Promise<DeliveryResult> {
-    console.log(`[comms:${this.prefix}] → ${msg.recipient ?? "n/a"} :: ${msg.subject ?? msg.body.slice(0, 80)}`);
+    // Log recipient + type only: message bodies can contain patient context,
+    // and console logs are not a PHI-safe store (do-not-log rule).
+    console.log(`[comms:${this.prefix}] -> recipient=${msg.recipient ?? "n/a"} type=${msg.type} (body not logged)`);
     return { status: "SIMULATED", provider: this.provider, providerRef: ref(this.prefix) };
   }
 }

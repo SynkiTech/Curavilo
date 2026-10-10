@@ -18,6 +18,9 @@ model Organization {
   slug      String   @unique
   currency  String   @default("NGN")
   timezone  String   @default("Africa/Lagos")
+  // Facility-gate brute-force lockout (security hardening): counters reset on success.
+  gateFailedCount Int      @default(0)
+  gateLockedUntil DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -227,6 +230,9 @@ model Session {
   activeFacilityId String?
   tokenHash        String   @unique
   expiresAt        DateTime
+  // Idle timeout (security hardening): sessions unused for SESSION_IDLE_TTL are
+  // rejected and deleted even before their absolute expiry.
+  lastSeenAt       DateTime @default(now())
   createdAt        DateTime @default(now())
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -919,6 +925,9 @@ model WebhookEndpoint {
   key        String   @unique
   url        String
   secretHash String
+  // AES-256-GCM encrypted copy of the endpoint secret (security hardening):
+  // lets outbound deliveries sign with the real secret without storing it plaintext.
+  secretEnc  String?
   events     String // CSV of event types this endpoint subscribes to
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())

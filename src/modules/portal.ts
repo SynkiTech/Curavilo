@@ -22,7 +22,7 @@ export async function createPortalToken(ctx: AuthContext, patientId: string, lab
   if (!ctx.permissions.includes("portals:manage")) throw new AppError(403, "forbidden", "Not permitted to manage portal access.");
   const patient = await db.patient.findFirst({ where: { id: patientId, orgId: ctx.orgId, facilityId: ctx.facilityId } });
   if (!patient) throw NotFound("Patient not found.");
-  const raw = `cv-${randomBytes(5).toString("hex")}`; // 10-char display code
+  const raw = `cv-${randomBytes(6).toString("hex")}`; // 12-char display code (~48 bits)
   const token = await db.portalToken.create({
     data: {
       orgId: ctx.orgId, facilityId: ctx.facilityId, patientId,
@@ -41,6 +41,8 @@ export async function createPortalToken(ctx: AuthContext, patientId: string, lab
 }
 
 export async function listPortalTokens(ctx: AuthContext) {
+  // Listing portal tokens (which patients have portal access) is sensitive.
+  if (!ctx.permissions.includes("portals:manage")) throw new AppError(403, "forbidden", "Not permitted to view portal access.");
   return db.portalToken.findMany({
     where: { orgId: ctx.orgId, facilityId: ctx.facilityId, revokedAt: null },
     orderBy: { createdAt: "desc" },
@@ -50,6 +52,7 @@ export async function listPortalTokens(ctx: AuthContext) {
 }
 
 export async function revokePortalToken(ctx: AuthContext, id: string) {
+  if (!ctx.permissions.includes("portals:manage")) throw new AppError(403, "forbidden", "Not permitted to manage portal access.");
   const updated = await db.portalToken.updateMany({ where: { id, orgId: ctx.orgId }, data: { revokedAt: new Date() } });
   await audit({
     orgId: ctx.orgId, facilityId: ctx.facilityId, actorUserId: ctx.userId, actorLabel: ctx.userName,
@@ -79,12 +82,11 @@ export function recordLoginAttempt(key: string) {
 
 export async function portalLogin(mrn: string, code: string) {
   const token = await db.portalToken.findUnique({ where: { tokenHash: hash(code) }, include: { patient: true } });
-  if (!token || token.revokedAt || token.expiresAt < new Date()) {
-    throw new AppError(401, "invalid_code", "Invalid or expired access code.");
-  }
-  if (token.patient.mrn.toLowerCase() !== mrn.trim().toLowerCase()) {
-    throw new AppError(401, "invalid_code", "MRN does not match this access code.");
-  }
+  // One generic message for both wrong-code and wrong-MRN so the endpoint cannot
+  // be used to enumerate valid access codes (account-enumeration defense).
+  const invalid = new AppError(401, "invalid_code", "Invalid access code or MRN.");
+  if (!token || token.revokedAt || token.expiresAt < new Date()) throw invalid;
+  if (token.patient.mrn.toLowerCase() !== mrn.trim().toLowerCase()) throw invalid;
   await db.portalToken.update({ where: { id: token.id }, data: { lastUsedAt: new Date() } });
   await audit({
     orgId: token.orgId, facilityId: token.facilityId, actorUserId: null, actorLabel: `Portal:${token.patient.mrn}`,
@@ -179,8 +181,20 @@ export const certificationSchema = z.object({
 });
 
 export async function addCertification(ctx: AuthContext, input: z.infer<typeof certificationSchema>) {
-  const staffId = input.staffId
-    ?? (await db.staffMember.findFirst({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, userId: ctx.userId } }))?.id;
+  let staffId: string | undefined = input.staffId;
+  if (staffId) {
+    // Targeting another staff member's record is an HR action, and the target
+    // must exist inside the caller's own org (no unscoped staff references).
+    const target = await db.staffMember.findFirst({ where: { id: staffId, orgId: ctx.orgId }, select: { id: true, userId: true } });
+    if (!target) throw NotFound("Staff member not found.");
+    const isSelf = target.userId === ctx.userId;
+    if (!isSelf && !ctx.permissions.includes("hr:manage")) {
+      throw new AppError(403, "forbidden", "Adding certifications for other staff requires HR permission.");
+    }
+    staffId = target.id;
+  } else {
+    staffId = (await db.staffMember.findFirst({ where: { orgId: ctx.orgId, facilityId: ctx.facilityId, userId: ctx.userId }, select: { id: true } }))?.id;
+  }
   if (!staffId) throw NotFound("Staff profile not found.");
   return db.staffCertification.create({
     data: { orgId: ctx.orgId, staffId, name: input.name, expiresAt: new Date(`${input.expiresAt}T00:00:00.000Z`) },
@@ -220,6 +234,8 @@ export async function decideLeave(ctx: AuthContext, id: string, decision: "APPRO
 }
 
 export async function listPendingLeave(ctx: AuthContext) {
+  // Pending leave lists staff names - readable by HR users only.
+  if (!ctx.permissions.includes("hr:read")) throw new AppError(403, "forbidden", "Not permitted to view leave requests.");
   return db.leaveRequest.findMany({
     where: { orgId: ctx.orgId, status: "PENDING" },
     orderBy: { createdAt: "desc" },

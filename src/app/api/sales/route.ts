@@ -1,5 +1,5 @@
 // Sales (POS) API - create sale, list/search, receipt, void, returns, held sales, till summary
-import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
+import { ok, fail, requireAuth, parseBody, parseQuery, Unauthorized } from "@/lib/api";
 import { z } from "zod";
 import {
   createSale, saleSchema, getSaleReceipt, voidSale,
@@ -85,6 +85,9 @@ const patchSchema = z.discriminatedUnion("action", [
 
 export async function PATCH(request: Request) {
   try {
+    // Authenticate before touching the body: no unauthenticated parse surface.
+    const { getAuth } = await import("@/lib/auth");
+    if (!(await getAuth())) return fail(Unauthorized());
     const body = await parseBody(request, patchSchema);
     if (body.action === "VOID") {
       const ctx = await requireAuth("pos:refund");

@@ -3,6 +3,7 @@ import { ok, fail, requireAuth, parseBody, parseQuery } from "@/lib/api";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const query = z.object({
   action: z.string().max(60).optional(),
@@ -34,6 +35,11 @@ const printLogSchema = z.object({
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    // Print events are client-reported; cap volume so the audit trail cannot be
+    // flooded, and keep actor identity server-derived (never client-supplied).
+    if (!rateLimit(`audit:${clientIp(request)}:${ctx.userId}`, 60, 60_000)) {
+      return ok({ error: "Too many print events. Try again shortly." }, 429);
+    }
     const input = await parseBody(request, printLogSchema);
     await audit({
       orgId: ctx.orgId,

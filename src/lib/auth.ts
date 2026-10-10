@@ -9,7 +9,8 @@ import { permissionsForRole, PROTECTED_PERMISSIONS, PERMISSIONS, type Permission
 
 const SESSION_COOKIE = "curavilo_session";
 const GATE_COOKIE = "curavilo_gate";
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // absolute lifetime
+const SESSION_IDLE_TTL_MS = 12 * 60 * 60 * 1000; // inactivity timeout (shared workstations)
 const GATE_TTL_MS = 30 * 60 * 1000; // short-lived, sliding on use (shared-computer safe)
 
 export function hashPassword(password: string): string {
@@ -37,6 +38,35 @@ function tokenToHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** Hash an opaque one-time token (invite/reset) for DB storage. Shared by auth route + staff module. */
+export const hashToken = tokenToHash;
+
+/** Generate a pronounceable-enough temporary password that satisfies the policy. */
+export function generateTempPassword(): string {
+  const words = ["ward", "clinic", "vital", "lens", "pulse", "chart", "calm", "check", "optic", "care"];
+  const pick = () => words[Math.floor(Math.random() * words.length)];
+  const n = Math.floor(Math.random() * 90) + 10;
+  const symbol = "!@#$%"[Math.floor(Math.random() * 5)];
+  return `${pick()}${pick().replace(/^./, (c) => c.toUpperCase())}${n}${symbol}`;
+}
+
+/** Cookie attributes shared by every auth cookie (portals included). */
+export function authCookieAttrs(maxAgeSeconds: number) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production" && process.env.SANDBOX !== "1",
+    path: "/",
+    maxAge: maxAgeSeconds,
+  };
+}
+
+/** Opportunistic housekeeping: remove dead sessions so stolen-expired rows cannot linger. */
+export async function pruneExpiredSessions(): Promise<void> {
+  await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => undefined);
+  await db.gateSession.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => undefined);
+}
+
 // ─── Application (staff) session ────────────────────────────────────────────
 
 export async function createSession(userId: string, orgId: string | null): Promise<string> {
@@ -46,13 +76,7 @@ export async function createSession(userId: string, orgId: string | null): Promi
     data: { userId, orgId, tokenHash: tokenToHash(token), expiresAt },
   });
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production" && process.env.SANDBOX !== "1",
-    path: "/",
-    maxAge: SESSION_TTL_MS / 1000,
-  });
+  jar.set(SESSION_COOKIE, token, authCookieAttrs(SESSION_TTL_MS / 1000));
   return token;
 }
 
@@ -77,13 +101,7 @@ export async function createGateSession(orgId: string): Promise<void> {
   const expiresAt = new Date(Date.now() + GATE_TTL_MS);
   await db.gateSession.create({ data: { orgId, tokenHash: tokenToHash(token), expiresAt } });
   const jar = await cookies();
-  jar.set(GATE_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production" && process.env.SANDBOX !== "1",
-    path: "/",
-    maxAge: GATE_TTL_MS / 1000,
-  });
+  jar.set(GATE_COOKIE, token, authCookieAttrs(GATE_TTL_MS / 1000));
 }
 
 /** Resolve + slide the gate session. Returns the gated org, or null. */
@@ -199,6 +217,18 @@ export async function getAuth(): Promise<AuthContext | null> {
     },
   });
   if (!session || session.expiresAt < new Date() || !session.orgId) return null;
+
+  // Idle timeout: a session unused for SESSION_IDLE_TTL dies even if its
+  // absolute expiry has not passed (shared reception/clinical workstations).
+  const idleMs = Date.now() - session.lastSeenAt.getTime();
+  if (idleMs > SESSION_IDLE_TTL_MS) {
+    await db.session.deleteMany({ where: { id: session.id } }).catch(() => undefined);
+    return null;
+  }
+  // Slide the idle window; throttle writes to at most once per minute per session.
+  if (idleMs > 60_000) {
+    await db.session.updateMany({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+  }
 
   const membership = await db.membership.findFirst({
     where: { userId: session.userId, orgId: session.orgId, active: true },

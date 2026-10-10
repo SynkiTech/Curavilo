@@ -28,7 +28,9 @@ const definitionSchema = z.object({
 
 export async function GET() {
   try {
-    const ctx = await requireAuth();
+    // Workflow definitions, run history and approval queues are operational
+    // configuration - read access follows manage access.
+    const ctx = await requireAuth("workflows:manage");
     const defs = await db.workflowDef.findMany({
       where: { orgId: ctx.orgId },
       orderBy: [{ key: "asc" }, { version: "desc" }],
