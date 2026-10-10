@@ -266,3 +266,22 @@ Verification evidence:
 
 Stage Summary:
 - Curavilo now fails closed and proves it: every route auth+permission-gated, tenant+facility scoped, mass-assignment-proof imports, SSRF-guarded outbound webhooks with real-secret HMAC and replay window, nonce CSP + CSRF origin assertions + no-store APIs, DB lockouts independent of spoofable headers, 12h idle sessions, dev-only credential echoes, PHI-free logs, formula-safe CSV exports, and a 73-check adversarial suite that must stay green. Zero unresolved Critical/High findings; remaining risks documented in docs/security/security-exceptions.md with owners and deadlines.
+
+---
+Task ID: 11
+Agent: main (Super Z)
+Task: READ-ONLY Supabase PostgreSQL migration audit (no code/DB changes): provider, Prisma version, schema/migration method, auth, env vars, data preservation, Supabase-specific config, files-to-change, compatibility risks, recommended connection topology + implementation plan.
+
+Work Log:
+- Inspected package.json + bun.lock (installed prisma/@prisma/client 6.19.2, NOT assumed); prisma/schema.prisma (provider sqlite, 62 models, 1225 lines); confirmed NO prisma/migrations dir and NO _prisma_migrations table (db push workflow only).
+- Grepped schema for Json/@db./dbgenerated/enum/autoincrement/Bytes/Decimal: zero matches (fully Postgres-portable, all String cuid PKs).
+- Raw SQL audit: only db.$queryRaw`SELECT 1` in api/health; no $queryRawUnsafe, no strftime/PRAGMA/sqlite_ dialects; no mode:"insensitive" today; 30 contains: sites across 9 files (case-sensitivity risk on Postgres).
+- Auth audit: custom scrypt + DB Session/GateSession + cookies (ADR 0005); no NextAuth/Supabase Auth; src/lib/auth.ts DB-agnostic. Zero Supabase config in code (docs-only mentions).
+- Env vars: only DATABASE_URL (file: scheme) set in .env; CURAVILO_SECRET_KEY unset -> secret-box fallback key derived FROM DATABASE_URL (key-rotation trap for WebhookEndpoint.secretEnc).
+- Data census (read-only sqlite): 61 tables, 537 rows (AuditEvent 133, Session 47, AIMessage 43, ServiceItem 34, User 22...); db/custom.db 1.3 MB; dev server RUNNING.
+- Checked tx-lock.ts (in-process keyed lock, Postgres-safe), scheduler.ts (DB-as-queue pump, dialect-neutral), backup-drill.ts (SQLite file-copy drill -> needs pg variant), .gitignore (.env* ignored).
+- Appended this entry; NO application file, schema, package, or database change was made.
+
+Stage Summary:
+- Migration surface is minimal: 1 schema line, env swap, 30-mode-insensitive patches, migrate baseline, data-copy script, backup-drill variant. Auth/RLS: keep custom auth; RLS optional second belt per docs/security/database-security.md.
+- Recommended: Supavisor session pooler (5432, IPv4) or direct 5432 for runtime + migrations; transaction pooler 6543 not required (single long-running Node server). secretEnc must be re-encrypted with a key independent of DATABASE_URL during cutover. Full implementation plan delivered in chat, NOT executed.
